@@ -2,7 +2,7 @@
 ===========================
 ## 关于Jyaoushingan
 Jyaoushingan日文的罗马音中文翻译就是邪王真眼。名字来源于《中二病也要谈恋爱》中女主角给自己右眼起的名字。
-![Jyaoushingan](https://github.com/xuwuorg/Jyaoushingan/img/RfaX7cW.gif "Jyaoushingan")
+![Jyaoushingan](https://github.com/xuwuorg/Jyaoushingan/blob/master/img/RfaX7cW.gif "Jyaoushingan")
 
 ## 关于这是干嘛的
 XJyaoushingan类是用来对Windows PE文件进行解析的一个工具类。简单来说就是外面众多PE工具的一份开源代码。不过我使用了C++将逻辑封装成了一个类方便操作。
