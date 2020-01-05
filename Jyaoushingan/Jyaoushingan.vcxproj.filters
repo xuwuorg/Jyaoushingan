@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="XJyaoushingan.cpp">
+      <Filter>PE</Filter>
+    </ClCompile>
+    <ClCompile Include="XString.cpp">
+      <Filter>需要自行补充</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>源码</Filter>
+    </ClCompile>
+    <ClCompile Include="Jyaoushingan.cpp">
+      <Filter>源码</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="XJyaoushingan.h">
+      <Filter>PE</Filter>
+    </ClInclude>
+    <ClInclude Include="XString.h">
+      <Filter>需要自行补充</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>资源</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>源码</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="PE">
+      <UniqueIdentifier>{a8bae7b4-df9e-42ef-9a4e-a64f572ebc09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="需要自行补充">
+      <UniqueIdentifier>{dec67673-2f40-44fc-a069-48eaffc9cbd2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="资源">
+      <UniqueIdentifier>{dfecb05c-026c-4328-806d-f135f596c1df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源码">
+      <UniqueIdentifier>{5c81eeff-0cd6-4d58-85f4-51c3fa6e0a40}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="C:\Users\ax\Desktop\av.txt">
+      <Filter>资源</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Jyaoushingan.rc">
+      <Filter>资源</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>
