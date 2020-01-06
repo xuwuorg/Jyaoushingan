@@ -1,5 +1,5 @@
 #pragma once
-/* 
+/************************************************************************************
 **  Copyright 2018 ~ 2222 阿虚
 **  blog: http://www.xuwu.org
 **  mail: xuwuorg#163.com
@@ -84,13 +84,34 @@
 // class XDataDirStream;
 // class XSectionTable;
 // class XSectionTableStream; 
+ 
 class XJyaoushingan;
-
 
 #include <windows.h>
 #include <XString.h>
 #include <map>
 #include <list>
+
+//XP的WinNT.h尽然没有带结构体
+typedef struct tagIMAGE_DELAYLOAD_DESCRIPTOR {
+    union {
+        DWORD AllAttributes;
+        struct {
+            DWORD RvaBased : 1;             // Delay load version 2
+            DWORD ReservedAttributes : 31;
+        } DUMMYSTRUCTNAME;
+    } Attributes;
+
+    DWORD DllNameRVA;                       // RVA to the name of the target library (NULL-terminate ASCII string)
+    DWORD ModuleHandleRVA;                  // RVA to the HMODULE caching location (PHMODULE)
+    DWORD ImportAddressTableRVA;            // RVA to the start of the IAT (PIMAGE_THUNK_DATA)
+    DWORD ImportNameTableRVA;               // RVA to the start of the name table (PIMAGE_THUNK_DATA::AddressOfData)
+    DWORD BoundImportAddressTableRVA;       // RVA to an optional bound IAT
+    DWORD UnloadInformationTableRVA;        // RVA to an optional unload info table
+    DWORD TimeDateStamp;                    // 0 if not bound,
+                                            // Otherwise, date/time of the target DLL
+
+} IMAGE_DELAYLOAD_DESCRIPTOR, * PIMAGE_DELAYLOAD_DESCRIPTOR;
 
 enum E_DATA_DIR_TABLE
 {
@@ -136,13 +157,17 @@ private:
     WORD m_index;
     XString m_name;
     DWORD m_address;
-}XIMPORT_FUN_NAME_TABLE, * PXIMPORT_FUN_NAME_TABLE, XEXPORT_FUN_NAME_TABLE, * PXEXPORT_FUN_NAME_TABLE;
+}XIMPORT_FUN_NAME_TABLE, * PXIMPORT_FUN_NAME_TABLE;
+typedef XXXPort_Fun_Name_Table XEXPORT_FUN_NAME_TABLE, * PXEXPORT_FUN_NAME_TABLE;
+typedef XXXPort_Fun_Name_Table XDELAY_IMPOR_FUN_NAME_TABLE, *PXDELAY_IMPOR_FUN_NAME_TABLE;
  
 /************************************************************************************/
 /*
 **  导出表数据
 **/
-typedef std::list<XXXPort_Fun_Name_Table> XIMPORT_FUN_TABLE, * PXIMPORT_FUN_TABLE, XEXPORT_FUN_TABLE, * PXEXPORT_FUN_TABLE;
+typedef std::list<XXXPort_Fun_Name_Table> XIMPORT_FUN_TABLE, * PXIMPORT_FUN_TABLE;
+typedef XIMPORT_FUN_TABLE XEXPORT_FUN_TABLE, *PXEXPORT_FUN_TABLE;
+typedef XIMPORT_FUN_TABLE XDELAY_IMPOR_FUN_TABLE, * PXDELAY_IMPOR_FUN_TABLE;
 typedef struct tagExportData
 {
     XString m_name;
@@ -153,7 +178,8 @@ typedef struct tagExportData
 /************************************************************************************
 **  导入表数据
 **/
-typedef std::map<XString, XIMPORT_FUN_TABLE> IMPOTR_TABLE_DATA, * PIMPOTR_TABLE_DATA;
+typedef std::map<XString, XIMPORT_FUN_TABLE> XIMPOTR_TABLE_DATA, *PXIMPOTR_TABLE_DATA;
+typedef XIMPOTR_TABLE_DATA XDELAY_IMPORTABLE, *PXDELAY_IMPORTABLE;
 
 /************************************************************************************
 **  重定位表数据
@@ -395,7 +421,7 @@ public:
     **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
-    bool get_importable(IMPOTR_TABLE_DATA& import_data); 
+    bool get_importable(XIMPOTR_TABLE_DATA& import_data);
     /*
     **  获取输出表信息
     **  param1：输出参数，返回当前PE的所有输出表数据内容
@@ -423,6 +449,16 @@ public:
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
     bool get_resource(std::list<XRESOURCE_DATA> data);
+    /*
+    **  获取延迟加载导入表
+    **  param1：输出参数，返回当前PE的所有资源表数据内容
+    **  返回值：如果获取成功返回true，否则返回false。
+    **  备注：
+    **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
+    **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
+    */
+    bool get_delay_load_importable(XDELAY_IMPORTABLE& delay_importable);
+
 
 private:
     bool get_import_name_table(DWORD bridge, XIMPORT_FUN_TABLE& fun_table); 

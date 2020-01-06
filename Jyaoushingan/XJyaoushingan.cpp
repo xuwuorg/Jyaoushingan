@@ -491,7 +491,7 @@ XJyaoushingan::rva_mem2file(
 
 bool 
 XJyaoushingan::get_importable(
-    IMPOTR_TABLE_DATA & import_data)
+    XIMPOTR_TABLE_DATA& import_data)
 {
     import_data.clear();
 
@@ -569,6 +569,7 @@ XJyaoushingan::get_import_name_table(
         PIMAGE_IMPORT_BY_NAME import_name = (PIMAGE_IMPORT_BY_NAME)GET_OFFSET_BUFFER(m_fp_bufer, fa);
 
         XIMPORT_FUN_NAME_TABLE table;
+        table.set_address(0);
         table.set_index(import_name->Hint);
         table.set_name((const char*)import_name->Name);
 
@@ -817,7 +818,68 @@ XJyaoushingan::get_resource(
 
     return false;
 }
-  
+
+bool 
+XJyaoushingan::get_delay_load_importable(
+    XDELAY_IMPORTABLE& delay_importable)
+{
+    do
+    {
+        IMAGE_DATA_DIRECTORY delay_load_importable;
+        if (!get_data_dir(E_DELAY_IMPORT_TABLE, delay_load_importable))
+        {
+            break;
+        }
+
+        DWORD offset = rva_mem2file(delay_load_importable.VirtualAddress);
+        if (offset == 0)
+        {
+            break;
+        }
+
+        PIMAGE_DELAYLOAD_DESCRIPTOR pdd  
+            = (PIMAGE_DELAYLOAD_DESCRIPTOR)GET_OFFSET_BUFFER(m_fp_bufer, offset);
+        if (pdd == NULL)
+        {
+            break;
+        }
+
+        DWORD count = delay_load_importable.Size / sizeof(IMAGE_DELAYLOAD_DESCRIPTOR);
+        for (DWORD i = 0; i < count; i++, pdd++)
+        {
+            DWORD offset = rva_mem2file(pdd->DllNameRVA);
+            char* pszdllname = (char*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
+
+            XString dllname(pszdllname);
+
+            DWORD bridge1 = rva_mem2file(pdd->ImportNameTableRVA);
+            DWORD bridge2 = rva_mem2file(pdd->ImportNameTableRVA);
+
+            XIMPORT_FUN_TABLE fun_table;
+            if (bridge1 != 0)
+            {
+                get_import_name_table(bridge1, fun_table);
+            }
+            else if (bridge2 != 0)
+            {
+                get_import_name_table(bridge2, fun_table);
+            }
+
+            if (!fun_table.empty())
+            { 
+                delay_importable.insert(
+                    std::pair<XString, XDELAY_IMPOR_FUN_TABLE>(
+                        dllname
+                        , fun_table));
+            } 
+        }
+
+        return true;
+    } while (false);
+
+    return false;
+}
+
 /*
 **  MZÍ·½âÎö
 */
