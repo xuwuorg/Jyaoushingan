@@ -72,6 +72,8 @@
 **      bool get_relocation(std::list<XRELOCATION_DATA>& lrelocation);
 **      得到资源信息
 **      bool get_resource(std::list<XRESOURCE_DATA> data);
+**      得到延迟加载导入表
+**      bool get_delay_load_importable(XDELAY_IMPORTABLE& delay_importable);
 **
 **
 ***********                                                                ***********
@@ -213,6 +215,15 @@ typedef struct tagXResourceData
     }resourct_info;
 
 }XRESOURCE_DATA, *PXRESOURCE_DATA;
+
+/************************************************************************************
+**  TLS信息
+**/
+typedef struct tagTLS
+{
+    IMAGE_TLS_DIRECTORY m_tls_dir;
+    std::list<DWORD> m_tls_fun_callback;
+}XTLS_DATA, *PXTLS_DATA;
  
 class XFileHeadStream;
 class XOptionHeadStream;
@@ -458,7 +469,15 @@ public:
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
     bool get_delay_load_importable(XDELAY_IMPORTABLE& delay_importable);
-
+    /*
+    **  获取线程局部存储表
+    **  param1：输出参数，返回当前PE的所有资源表数据内容
+    **  返回值：如果获取成功返回true，否则返回false。
+    **  备注：
+    **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
+    **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
+    */
+    bool get_thread_local_storage(XTLS_DATA& tls_data);
 
 private:
     bool get_import_name_table(DWORD bridge, XIMPORT_FUN_TABLE& fun_table); 

@@ -880,6 +880,53 @@ XJyaoushingan::get_delay_load_importable(
     return false;
 }
 
+bool 
+XJyaoushingan::get_thread_local_storage(
+    XTLS_DATA& tls_data)
+{
+    do
+    {
+        IMAGE_DATA_DIRECTORY thread_local_table;
+        if (!get_data_dir(E_THREAD_LOCAL_TABLE, thread_local_table))
+        {
+            break;
+        }
+
+        DWORD offset = rva_mem2file(thread_local_table.VirtualAddress);
+        if (offset == 0)
+        {
+            break;
+        }
+
+        PIMAGE_TLS_DIRECTORY ptd
+            = (PIMAGE_TLS_DIRECTORY)GET_OFFSET_BUFFER(m_fp_bufer, offset);
+        if (ptd == NULL)
+        {
+            break;
+        }
+
+        memcpy((PVOID)&tls_data.m_tls_dir, ptd, sizeof(IMAGE_TLS_DIRECTORY));
+
+        DWORD callback_fun = ptd->AddressOfCallBacks - m_pe->OptionalHeader.ImageBase;
+        callback_fun = rva_mem2file(callback_fun);
+        DWORD* pos = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, callback_fun);
+        if (IsBadReadPtr(pos, sizeof(DWORD)))
+        {
+            return true;
+        }
+
+        while (*pos != 0)
+        {
+            tls_data.m_tls_fun_callback.push_back(*pos);
+            pos++;
+        }
+
+        return true;
+    } while (false);
+
+    return false;
+}
+
 /*
 **  MZÍ·½âÎö
 */

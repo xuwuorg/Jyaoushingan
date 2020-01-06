@@ -162,7 +162,69 @@ void delayimport(XString& file_path)
     XDELAY_IMPORTABLE data;
     pec.get_delay_load_importable(data);
 }
+
+void threadload(XString& file_path)
+{
+    XJyaoushingan pec;
+    //pec.set_file_path(file_path);
+    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    if (!pec.open())
+    {
+        std::cout << "打开文件失败！" << std::endl;
+        return;
+    }
+
+    XTLS_DATA tls_data;
+    pec.get_thread_local_storage(tls_data);
+}
+
+void NTAPI __stdcall TLS_CALLBACK(PVOID DllHandle, DWORD dwReason, PVOID Reserved) //DllHandle模块句柄、Reason调用原因、 Reserved加载方式（显式/隐式）
+{
+    XString str((DWORD)TLS_CALLBACK);
+    switch (dwReason)
+    {
+    case DLL_THREAD_ATTACH:									//Reason会有4种参数
+        MessageBox(0, L"TLS函数DLL_THREAD_ATTACH1", L"TLS", 0); break;
+    case DLL_PROCESS_ATTACH:									//debug
+        MessageBox(0, str.w_cstr(), L"TLS", 0); break;
+    case DLL_THREAD_DETACH:
+        MessageBox(0, L"TLS函数DLL_THREAD_DETACH1", L"TLS", 0); break;
+    case DLL_PROCESS_DETACH:
+        MessageBox(0, L"TLS函数DLL_PROCESS_DETACH1", L"TLS", 0); break;
+    }
+
+} 
+
+void NTAPI __stdcall TLS_CALLBACK2(PVOID DllHandle, DWORD dwReason, PVOID Reserved) //DllHandle模块句柄、Reason调用原因、 Reserved加载方式（显式/隐式）
+{
+    switch (dwReason)
+    {
+    case DLL_THREAD_ATTACH:									//Reason会有4种参数
+        MessageBox(0, L"TLS函数DLL_THREAD_ATTACH2", L"TLS", 0); break;
+    case DLL_PROCESS_ATTACH:									//debug
+        MessageBox(0, L"TLS函数DLL_PROCESS_ATTACH2", L"TLS", 0); break;
+    case DLL_THREAD_DETACH:
+        MessageBox(0, L"TLS函数DLL_THREAD_DETACH2", L"TLS", 0); break;
+    case DLL_PROCESS_DETACH:
+        MessageBox(0, L"TLS函数DLL_PROCESS_DETACH2", L"TLS", 0); break;
+    }
+
+}
   
+//使用TLS需要在程序中新建一个data段专门存放TLS数据，
+//并且需要通知链接器在PE头中添加相关数据，所以有了这一段代码
+#pragma comment (linker, "/INCLUDE:__tls_used")
+#pragma comment (linker, "/INCLUDE:__tls_callback")  
+
+EXTERN_C
+
+#pragma data_seg (".CRT$XLB")
+//.CRT表明是使用C RunTime机制，$后面的XLB中：X表示随机的标识，L表示是TLS callback section，B可以被换成B到Y之间的任意一个字母，
+//但是不能使用“.CRT$XLA”和“.CRT$XLZ”，因为“.CRT$XLA”和“.CRT$XLZ”是用于tlssup.obj的。
+PIMAGE_TLS_CALLBACK _tls_callback[] = { TLS_CALLBACK, TLS_CALLBACK2,0 };
+#pragma data_seg ()
+ 
+ 
 int main(int argc, char* argv[])
 {  
 
@@ -199,7 +261,9 @@ int main(int argc, char* argv[])
 //     else if (command == L"resource")
 //         resource(path);
 //     else if (command == L"delayimport")
-        delayimport(path);
+//         delayimport(path);
+//     else if (command == L"threadload")
+            threadload(path);
 	    
     return 0;
 } 
