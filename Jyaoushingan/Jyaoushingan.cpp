@@ -6,6 +6,7 @@
 #include <windows.h>
 #include "XJyaoushingan.h"
 #include "resource.h"
+#include <XString.h>
 
 void showpe(XString& path)
 {
@@ -97,7 +98,7 @@ void showimport(XString& file_path)
         return;
     }
 
-    IMPOTR_TABLE_DATA import_data;
+    XIMPOTR_TABLE_DATA import_data;
     pec.get_importable(import_data);
      
 }
@@ -146,6 +147,21 @@ void resource(XString& file_path)
     std::list<XRESOURCE_DATA> list_data;
 	pec.get_resource(list_data);
 }
+
+void delayimport(XString& file_path)
+{
+    XJyaoushingan pec;
+    pec.set_file_path(file_path);
+    //pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    if (!pec.open())
+    {
+        std::cout << "打开文件失败！" << std::endl;
+        return;
+    }
+
+    XDELAY_IMPORTABLE data;
+    pec.get_delay_load_importable(data);
+}
   
 int main(int argc, char* argv[])
 {  
@@ -170,18 +186,20 @@ int main(int argc, char* argv[])
     }   
      
     XString command(argv[1]);
-    XString path(L"E:\\code\\邪王真眼\\Eye Of the Evil King\\1.exe");
+    XString path(L"E:\\code\\邪王真眼\\XJyaoushingan\\Release\\1.exe");
 
-   // if (command == L"pe") 
-        //showpe(path); 
-   // else if (command == L"import") 
-        //showimport(path); 
- //   else if (command == L"export") 
-        //showexport(path); 
-  //  else if (command == L"reload") 
-        //relocation(path);
-  //  else if (command == L"resource")
-        resource(path);
+//     if (command == L"pe") 
+//         showpe(path); 
+//     else if (command == L"import") 
+//         showimport(path); 
+//     else if (command == L"export") 
+//         showexport(path); 
+//     else if (command == L"reload") 
+//         relocation(path);
+//     else if (command == L"resource")
+//         resource(path);
+//     else if (command == L"delayimport")
+        delayimport(path);
 	    
     return 0;
 } 
