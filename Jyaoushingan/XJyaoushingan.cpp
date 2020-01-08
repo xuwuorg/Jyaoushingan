@@ -1,16 +1,28 @@
 #include "pch.h"
 #include "XJyaoushingan.h"
 #include <time.h>
+     
+#define IS_POINT_EMPTY_RET_WCSNULL(point)\
+{if (point == NULL) return L"";}
 
-#define INIT_FILE_HEAD_STREAM if (m_file_head == NULL) return L""; 
-#define INIT_OPTION_HEAD_STREAM if (m_option_head == NULL) return L"";
-#define INIT_DATA_DIR_STREAM if (m_data_dir == NULL) return L""; 
-#define INIT_SECTION_HANDLE_STREAM if (m_section_handle == NULL) return L"";
-    
 #define NOT_INIT() \
 if (m_fp_bufer == NULL || IsBadReadPtr(m_fp_bufer, sizeof(LPVOID)))\
 {\
 return false;\
+}
+
+#define GET_DATA_DIR_POINT(INDEX, OUT_DIR, OUT_POINT_TYPE, OUT_POINT)\
+{\
+if (!get_data_dir(INDEX, OUT_DIR))\
+{\
+break; \
+}\
+DWORD offset_name = rva_mem2file(OUT_DIR.VirtualAddress); \
+if (offset_name == 0)\
+{\
+break; \
+}\
+OUT_POINT = (OUT_POINT_TYPE)GET_OFFSET_BUFFER(m_fp_bufer, offset_name); \
 }
 
 #define GET_OFFSET_BUFFER(p, o) (LPVOID)((DWORD)p + o) 
@@ -496,34 +508,41 @@ XJyaoushingan::get_importable(
     import_data.clear();
 
     do
-    {
+    { 
         IMAGE_DATA_DIRECTORY import_name;
-        if (!get_data_dir(E_IMPORT_TAB, import_name))
-        {
-            break;
-        }
-
-        //         IMAGE_DATA_DIRECTORY import_fun;
-        //         if (!get_data_dir(E_IMPORT_ADDRESS_TABLE, import_fun))
-        //         {
-        //             break;
-        //         }
-
-        DWORD offset_name = rva_mem2file(import_name.VirtualAddress);
-        if (offset_name == 0)
-        {
-            break;
-        }
-
-        //         DWORD offset_fun = rva_mem2file(import_fun.VirtualAddress);
-        //         if (offset_fun == 0)
-        //         {
-        //             break;
-        //         }
-
-        PIMAGE_IMPORT_DESCRIPTOR import_descriptor 
-            = (PIMAGE_IMPORT_DESCRIPTOR)GET_OFFSET_BUFFER(m_fp_bufer, offset_name);
-        /*        DWORD pos2 = (DWORD)GET_OFFSET_BUFFER(m_fp_bufer, offset_fun);*/
+        PIMAGE_IMPORT_DESCRIPTOR import_descriptor;
+        GET_DATA_DIR_POINT(
+            E_IMPORT_TAB
+            , import_name
+            , PIMAGE_IMPORT_DESCRIPTOR
+            , import_descriptor);
+//         IMAGE_DATA_DIRECTORY import_name;
+//         if (!get_data_dir(E_IMPORT_TAB, import_name))
+//         {
+//             break;
+//         }
+// 
+//         //         IMAGE_DATA_DIRECTORY import_fun;
+//         //         if (!get_data_dir(E_IMPORT_ADDRESS_TABLE, import_fun))
+//         //         {
+//         //             break;
+//         //         }
+// 
+//         DWORD offset_name = rva_mem2file(import_name.VirtualAddress);
+//         if (offset_name == 0)
+//         {
+//             break;
+//         }
+// 
+//         //         DWORD offset_fun = rva_mem2file(import_fun.VirtualAddress);
+//         //         if (offset_fun == 0)
+//         //         {
+//         //             break;
+//         //         }
+// 
+//         PIMAGE_IMPORT_DESCRIPTOR import_descriptor 
+//             = (PIMAGE_IMPORT_DESCRIPTOR)GET_OFFSET_BUFFER(m_fp_bufer, offset_name);
+//         /*        DWORD pos2 = (DWORD)GET_OFFSET_BUFFER(m_fp_bufer, offset_fun);*/
 
         for (DWORD pos = 0;
             pos < import_name.Size;
@@ -586,28 +605,18 @@ XJyaoushingan::get_exportable(
     do
     {
         IMAGE_DATA_DIRECTORY exportable;
-        if (!get_data_dir(E_EXPORT_TAB, exportable))
-        {
-            break;
-        }
-
-        DWORD offset = rva_mem2file(exportable.VirtualAddress);
-        if (offset == 0)
-        {
-            break;
-        }
-
-        PIMAGE_EXPORT_DIRECTORY export_descriptor = (PIMAGE_EXPORT_DIRECTORY)GET_OFFSET_BUFFER(m_fp_bufer, offset);
-        if (export_descriptor == NULL)
-        {
-            break;
-        }
-
+        PIMAGE_EXPORT_DIRECTORY export_descriptor;
+        GET_DATA_DIR_POINT(
+            E_EXPORT_TAB
+            , exportable
+            , PIMAGE_EXPORT_DIRECTORY
+            , export_descriptor);
+          
         DWORD name_pos = rva_mem2file(export_descriptor->Name);
         char* name = (char*)GET_OFFSET_BUFFER(m_fp_bufer, name_pos);
         XString dll_name(name);
 
-        offset = rva_mem2file(export_descriptor->AddressOfNameOrdinals);
+        DWORD offset = rva_mem2file(export_descriptor->AddressOfNameOrdinals);
         WORD* AddressOfNameOrdinals = (WORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
 
         offset = rva_mem2file(export_descriptor->AddressOfNames);
@@ -654,7 +663,7 @@ XJyaoushingan::get_relocation(
     std::list<XRELOCATION_DATA> & lrelocation)
 {
     do
-    {
+    { 
         IMAGE_DATA_DIRECTORY relocation;
         if (!get_data_dir(E_BASE_RELOCATION_TABLE, relocation))
         {
@@ -666,10 +675,10 @@ XJyaoushingan::get_relocation(
         {
             break;
         }
-
+         
         DWORD count = 0;
         for (DWORD index = 0; index < relocation.Size; index += count)
-        {
+        { 
             PIMAGE_BASE_RELOCATION relocation_descriptor
                 = (PIMAGE_BASE_RELOCATION)GET_OFFSET_BUFFER(m_fp_bufer, offset);
             if (relocation_descriptor == NULL)
@@ -718,24 +727,13 @@ XJyaoushingan::get_resource(
     do
     {
         IMAGE_DATA_DIRECTORY recource;
-        if (!get_data_dir(E_RESOURCE_TAB, recource))
-        {
-            break;
-        }
-
-        DWORD offset = rva_mem2file(recource.VirtualAddress);
-        if (offset == 0)
-        {
-            break;
-        }
-
-        PIMAGE_RESOURCE_DIRECTORY rd_root
-            = (PIMAGE_RESOURCE_DIRECTORY)GET_OFFSET_BUFFER(m_fp_bufer, offset);
-        if (rd_root == NULL)
-        {
-            break;
-        }
-
+        PIMAGE_RESOURCE_DIRECTORY rd_root;
+        GET_DATA_DIR_POINT(
+            E_RESOURCE_TAB
+            , recource
+            , PIMAGE_RESOURCE_DIRECTORY
+            , rd_root);
+          
         DWORD rs = rd_root->NumberOfIdEntries + rd_root->NumberOfNamedEntries;
 
         PIMAGE_RESOURCE_DIRECTORY_ENTRY rde =
@@ -826,23 +824,12 @@ XJyaoushingan::get_delay_load_importable(
     do
     {
         IMAGE_DATA_DIRECTORY delay_load_importable;
-        if (!get_data_dir(E_DELAY_IMPORT_TABLE, delay_load_importable))
-        {
-            break;
-        }
-
-        DWORD offset = rva_mem2file(delay_load_importable.VirtualAddress);
-        if (offset == 0)
-        {
-            break;
-        }
-
-        PIMAGE_DELAYLOAD_DESCRIPTOR pdd  
-            = (PIMAGE_DELAYLOAD_DESCRIPTOR)GET_OFFSET_BUFFER(m_fp_bufer, offset);
-        if (pdd == NULL)
-        {
-            break;
-        }
+        PIMAGE_DELAYLOAD_DESCRIPTOR pdd;
+        GET_DATA_DIR_POINT(
+            E_DELAY_IMPORT_TABLE
+            , delay_load_importable
+            , PIMAGE_DELAYLOAD_DESCRIPTOR
+            , pdd); 
 
         DWORD count = delay_load_importable.Size / sizeof(IMAGE_DELAYLOAD_DESCRIPTOR);
         for (DWORD i = 0; i < count; i++, pdd++)
@@ -887,24 +874,13 @@ XJyaoushingan::get_thread_local_storage(
     do
     {
         IMAGE_DATA_DIRECTORY thread_local_table;
-        if (!get_data_dir(E_THREAD_LOCAL_TABLE, thread_local_table))
-        {
-            break;
-        }
-
-        DWORD offset = rva_mem2file(thread_local_table.VirtualAddress);
-        if (offset == 0)
-        {
-            break;
-        }
-
-        PIMAGE_TLS_DIRECTORY ptd
-            = (PIMAGE_TLS_DIRECTORY)GET_OFFSET_BUFFER(m_fp_bufer, offset);
-        if (ptd == NULL)
-        {
-            break;
-        }
-
+        PIMAGE_TLS_DIRECTORY ptd;
+        GET_DATA_DIR_POINT(
+            E_THREAD_LOCAL_TABLE
+            , thread_local_table
+            , PIMAGE_TLS_DIRECTORY
+            , ptd);
+          
         memcpy((PVOID)&tls_data.m_tls_dir, ptd, sizeof(IMAGE_TLS_DIRECTORY));
 
         DWORD callback_fun = ptd->AddressOfCallBacks - m_pe->OptionalHeader.ImageBase;
@@ -934,28 +910,16 @@ XJyaoushingan::get_load_config_table(
     do
     {
         IMAGE_DATA_DIRECTORY load_config_table;
-        if (!get_data_dir(E_LOAD_CONFIG_TABLE, load_config_table))
-        {
-            break;
-        }
-
-        DWORD offset = rva_mem2file(load_config_table.VirtualAddress);
-        if (offset == 0)
-        {
-            break;
-        }
-
-        PIMAGE_LOAD_CONFIG_DIRECTORY lcc
-            = (PIMAGE_LOAD_CONFIG_DIRECTORY)GET_OFFSET_BUFFER(m_fp_bufer, offset);
-        if (lcc == NULL)
-        {
-            break;
-        }
+        PIMAGE_LOAD_CONFIG_DIRECTORY lcc;
+        GET_DATA_DIR_POINT(
+            E_LOAD_CONFIG_TABLE
+            , load_config_table
+            , PIMAGE_LOAD_CONFIG_DIRECTORY
+            , lcc); 
 
         memcpy((PVOID)&load_config.m_load_config, lcc, sizeof(IMAGE_LOAD_CONFIG_DIRECTORY));
-
-
-        offset = rva_mem2file(lcc->SEHandlerTable - m_pe->OptionalHeader.ImageBase); 
+         
+        DWORD offset = rva_mem2file(lcc->SEHandlerTable - m_pe->OptionalHeader.ImageBase); 
         DWORD* she_table = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
         for (DWORD i = 0; i < lcc->SEHandlerCount; i++)
         {  
@@ -963,8 +927,7 @@ XJyaoushingan::get_load_config_table(
             fun_address = (DWORD)GET_OFFSET_BUFFER(m_fp_bufer, fun_address);
          
             load_config.m_seh_list.push_back(fun_address);
-        }
-
+        } 
 
         return true;
     } while (false);
@@ -1077,7 +1040,7 @@ XFileHeadStream::to_string()
 XString 
 XFileHeadStream::Machine()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     XString str; 
     switch (m_file_head->Machine)
@@ -1101,7 +1064,7 @@ XFileHeadStream::Machine()
 XString 
 XFileHeadStream::NumberOfSections()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     XString str;
     str << m_file_head->NumberOfSections;
@@ -1111,7 +1074,7 @@ XFileHeadStream::NumberOfSections()
 XString 
 XFileHeadStream::TimeDateStamp()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     time_t t = m_file_head->TimeDateStamp;
     tm* local = localtime(&t);
@@ -1127,7 +1090,7 @@ XFileHeadStream::TimeDateStamp()
 XString 
 XFileHeadStream::PointerToSymbolTable()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     XString str;
     str << m_file_head->PointerToSymbolTable;
@@ -1137,7 +1100,7 @@ XFileHeadStream::PointerToSymbolTable()
 XString 
 XFileHeadStream::NumberOfSymbols()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     XString str;
     str << m_file_head->NumberOfSymbols;
@@ -1147,7 +1110,7 @@ XFileHeadStream::NumberOfSymbols()
 XString 
 XFileHeadStream::SizeOfOptionalHeader()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     XString str;
     str << m_file_head->SizeOfOptionalHeader;
@@ -1157,7 +1120,7 @@ XFileHeadStream::SizeOfOptionalHeader()
 XString 
 XFileHeadStream::Characteristics()
 {
-    INIT_FILE_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_file_head);
 
     XString str;
 
@@ -1260,9 +1223,9 @@ XOptionHeadStream::init(
 
 XString XOptionHeadStream::to_string()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head); 
 
-        XString str;
+    XString str;
     str << L"选项头: \r\n";
     str << L"文件类型: " << Magic() << L"\r\n";
     str << L"链接器主版本号: " << MajorLinkerVersion() << L"\r\n";
@@ -1301,7 +1264,7 @@ XString XOptionHeadStream::to_string()
 XString 
 XOptionHeadStream::Magic()
 {
-    INIT_OPTION_HEAD_STREAM 
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
     XString str;
 
     if (m_option_head->Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
@@ -1323,7 +1286,7 @@ XOptionHeadStream::Magic()
 XString 
 XOptionHeadStream::MajorLinkerVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MajorLinkerVersion;
@@ -1333,7 +1296,7 @@ XOptionHeadStream::MajorLinkerVersion()
 XString 
 XOptionHeadStream::MinorLinkerVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MinorLinkerVersion;
@@ -1343,7 +1306,7 @@ XOptionHeadStream::MinorLinkerVersion()
 XString 
 XOptionHeadStream::SizeOfCode()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfCode;
@@ -1353,7 +1316,7 @@ XOptionHeadStream::SizeOfCode()
 XString 
 XOptionHeadStream::SizeOfInitializedData()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfInitializedData;
@@ -1363,7 +1326,7 @@ XOptionHeadStream::SizeOfInitializedData()
 XString 
 XOptionHeadStream::SizeOfUninitializedData()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfUninitializedData;
@@ -1373,7 +1336,7 @@ XOptionHeadStream::SizeOfUninitializedData()
 XString 
 XOptionHeadStream::AddressOfEntryPoint()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->AddressOfEntryPoint;
@@ -1383,7 +1346,7 @@ XOptionHeadStream::AddressOfEntryPoint()
 XString 
 XOptionHeadStream::BaseOfCode()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->BaseOfCode;
@@ -1393,7 +1356,7 @@ XOptionHeadStream::BaseOfCode()
 XString 
 XOptionHeadStream::BaseOfData()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->BaseOfData;
@@ -1403,7 +1366,7 @@ XOptionHeadStream::BaseOfData()
 XString 
 XOptionHeadStream::ImageBase()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->ImageBase;
@@ -1413,7 +1376,7 @@ XOptionHeadStream::ImageBase()
 XString 
 XOptionHeadStream::SectionAlignment()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SectionAlignment;
@@ -1423,7 +1386,7 @@ XOptionHeadStream::SectionAlignment()
 XString 
 XOptionHeadStream::FileAlignment()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->FileAlignment;
@@ -1433,7 +1396,7 @@ XOptionHeadStream::FileAlignment()
 XString 
 XOptionHeadStream::MajorOperatingSystemVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MajorOperatingSystemVersion;
@@ -1443,7 +1406,7 @@ XOptionHeadStream::MajorOperatingSystemVersion()
 XString 
 XOptionHeadStream::MinorOperatingSystemVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MinorOperatingSystemVersion;
@@ -1453,7 +1416,7 @@ XOptionHeadStream::MinorOperatingSystemVersion()
 XString 
 XOptionHeadStream::MajorImageVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MajorImageVersion;
@@ -1463,7 +1426,7 @@ XOptionHeadStream::MajorImageVersion()
 XString 
 XOptionHeadStream::MinorImageVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MinorImageVersion;
@@ -1473,7 +1436,7 @@ XOptionHeadStream::MinorImageVersion()
 XString 
 XOptionHeadStream::MajorSubsystemVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MajorSubsystemVersion;
@@ -1483,7 +1446,7 @@ XOptionHeadStream::MajorSubsystemVersion()
 XString 
 XOptionHeadStream::MinorSubsystemVersion()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->MinorSubsystemVersion;
@@ -1493,7 +1456,7 @@ XOptionHeadStream::MinorSubsystemVersion()
 XString 
 XOptionHeadStream::Win32VersionValue()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->Win32VersionValue;
@@ -1503,7 +1466,7 @@ XOptionHeadStream::Win32VersionValue()
 XString 
 XOptionHeadStream::SizeOfImage()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfImage;
@@ -1513,7 +1476,7 @@ XOptionHeadStream::SizeOfImage()
 XString 
 XOptionHeadStream::SizeOfHeaders()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfHeaders;
@@ -1523,7 +1486,7 @@ XOptionHeadStream::SizeOfHeaders()
 XString 
 XOptionHeadStream::CheckSum()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->CheckSum;
@@ -1533,7 +1496,7 @@ XOptionHeadStream::CheckSum()
 XString 
 XOptionHeadStream::Subsystem()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     switch (m_option_head->Subsystem)
@@ -1600,7 +1563,7 @@ XOptionHeadStream::Subsystem()
 XString 
 XOptionHeadStream::DllCharacteristics()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     if (m_option_head->Subsystem & 0x0001)
@@ -1679,7 +1642,7 @@ XOptionHeadStream::DllCharacteristics()
 XString 
 XOptionHeadStream::SizeOfStackReserve()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfStackReserve;
@@ -1689,7 +1652,7 @@ XOptionHeadStream::SizeOfStackReserve()
 XString 
 XOptionHeadStream::SizeOfStackCommit()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfStackCommit;
@@ -1699,7 +1662,7 @@ XOptionHeadStream::SizeOfStackCommit()
 XString 
 XOptionHeadStream::SizeOfHeapReserve()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfHeapReserve;
@@ -1709,7 +1672,7 @@ XOptionHeadStream::SizeOfHeapReserve()
 XString 
 XOptionHeadStream::SizeOfHeapCommit()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->SizeOfHeapCommit;
@@ -1719,7 +1682,7 @@ XOptionHeadStream::SizeOfHeapCommit()
 XString 
 XOptionHeadStream::LoaderFlags()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->LoaderFlags;
@@ -1729,7 +1692,7 @@ XOptionHeadStream::LoaderFlags()
 XString 
 XOptionHeadStream::NumberOfRvaAndSizes()
 {
-    INIT_OPTION_HEAD_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
 
     XString str;
     str << m_option_head->NumberOfRvaAndSizes;
@@ -1759,7 +1722,7 @@ XDataDirStream::init(
 XString 
 XDataDirStream::to_string()
 {
-    INIT_DATA_DIR_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_data_dir); 
 
         WCHAR sz[][100] = {
             L"导出表: "
@@ -1834,7 +1797,7 @@ XSectionTableStream::to_string(
 XString 
 XSectionTableStream::Name()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle); 
 
     XString str((char*)m_section_handle->Name);
     return str;
@@ -1843,7 +1806,7 @@ XSectionTableStream::Name()
 XString 
 XSectionTableStream::PhysicalAddress()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->Misc.PhysicalAddress;
@@ -1853,7 +1816,7 @@ XSectionTableStream::PhysicalAddress()
 XString 
 XSectionTableStream::VirtualSize()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->Misc.VirtualSize;
@@ -1863,7 +1826,7 @@ XSectionTableStream::VirtualSize()
 XString 
 XSectionTableStream::VirtualAddress()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->VirtualAddress;
@@ -1873,7 +1836,7 @@ XSectionTableStream::VirtualAddress()
 XString 
 XSectionTableStream::SizeOfRawData()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->SizeOfRawData;
@@ -1883,7 +1846,7 @@ XSectionTableStream::SizeOfRawData()
 XString 
 XSectionTableStream::PointerToRawData()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->PointerToRawData;
@@ -1893,7 +1856,7 @@ XSectionTableStream::PointerToRawData()
 XString 
 XSectionTableStream::PointerToRelocations()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->PointerToRelocations;
@@ -1903,7 +1866,7 @@ XSectionTableStream::PointerToRelocations()
 XString 
 XSectionTableStream::PointerToLinenumbers()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->PointerToLinenumbers;
@@ -1913,7 +1876,7 @@ XSectionTableStream::PointerToLinenumbers()
 XString 
 XSectionTableStream::NumberOfRelocations()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->NumberOfRelocations;
@@ -1923,7 +1886,7 @@ XSectionTableStream::NumberOfRelocations()
 XString 
 XSectionTableStream::NumberOfLinenumbers()
 {
-    INIT_SECTION_HANDLE_STREAM
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
 
     XString str;
     str << m_section_handle->NumberOfLinenumbers;
@@ -1933,6 +1896,8 @@ XSectionTableStream::NumberOfLinenumbers()
 XString 
 XSectionTableStream::Characteristics()
 {
+    IS_POINT_EMPTY_RET_WCSNULL(m_section_handle);
+
     XString str;
     str << L"节中包含";
 

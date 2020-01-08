@@ -74,6 +74,8 @@
 **      bool get_resource(std::list<XRESOURCE_DATA> data);
 **      得到延迟加载导入表
 **      bool get_delay_load_importable(XDELAY_IMPORTABLE& delay_importable);
+**      得到加载配置表
+**      bool get_load_config_table(XLOAD_CONFIG_TABLE& load_config);
 **
 **
 ***********                                                                ***********
