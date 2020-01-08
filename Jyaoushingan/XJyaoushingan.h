@@ -224,7 +224,16 @@ typedef struct tagTLS
     IMAGE_TLS_DIRECTORY m_tls_dir;
     std::list<DWORD> m_tls_fun_callback;
 }XTLS_DATA, *PXTLS_DATA;
- 
+
+/************************************************************************************
+**  全局配置表
+**/
+typedef struct tagLoadConfigTable
+{
+    IMAGE_LOAD_CONFIG_DIRECTORY m_load_config;
+    std::list<DWORD> m_seh_list;
+}XLOAD_CONFIG_TABLE, * PXLOAD_CONFIG_TABLEXTLS_DATA;
+
 class XFileHeadStream;
 class XOptionHeadStream;
 class XDataDirStream;
@@ -478,6 +487,15 @@ public:
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
     bool get_thread_local_storage(XTLS_DATA& tls_data);
+    /*
+    **  加载配置信息表
+    **  param1：输出参数，返回当前PE的所有资源表数据内容
+    **  返回值：如果获取成功返回true，否则返回false。
+    **  备注：
+    **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
+    **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
+    */
+    bool get_load_config_table(XLOAD_CONFIG_TABLE& load_config);
 
 private:
     bool get_import_name_table(DWORD bridge, XIMPORT_FUN_TABLE& fun_table); 

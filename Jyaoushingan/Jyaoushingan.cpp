@@ -163,8 +163,16 @@ void delayimport(XString& file_path)
     pec.get_delay_load_importable(data);
 }
 
-void threadload(XString& file_path)
+LONG WINAPI seh2(
+    _In_ struct _EXCEPTION_POINTERS* ExceptionInfo
+)
 {
+    MessageBox(0, L"222", 0, 0);
+    return 0;
+}
+
+void threadload(const wchar_t* psz)
+{ 
     XJyaoushingan pec;
     //pec.set_file_path(file_path);
     pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
@@ -176,6 +184,61 @@ void threadload(XString& file_path)
 
     XTLS_DATA tls_data;
     pec.get_thread_local_storage(tls_data);
+}
+
+void fun2(const wchar_t* psz)
+{
+    SetUnhandledExceptionFilter(seh2);
+    threadload(psz);
+//     __try
+//     {
+//         threadload(psz);
+//     }
+//     __except (seh2(GetExceptionInformation()))
+//     {
+//         printf("222");
+//     }
+}
+
+LONG WINAPI seh1(
+    _In_ struct _EXCEPTION_POINTERS* ExceptionInfo
+)
+{
+    MessageBox(0, L"111", 0, 0);
+    return 0;
+}
+ 
+void loadconfig(const wchar_t* psz)
+{ 
+    XJyaoushingan pec;
+    //pec.set_file_path(psz);
+    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    if (!pec.open())
+    {
+        std::cout << "打开文件失败！" << std::endl;
+        return;
+    }
+
+    XLOAD_CONFIG_TABLE tls_data;
+    pec.get_load_config_table(tls_data);
+
+    int dw = 10;
+    int sz = 0;
+    dw  /= sz;
+}
+ 
+void fun1(const wchar_t* psz)
+{
+//     SetUnhandledExceptionFilter(seh1); 
+//     loadconfig(psz);
+    __try
+    { 
+        loadconfig(psz);
+    }
+    __except (seh1(GetExceptionInformation()))
+    {
+        printf("1111");
+    }
 }
 
 void NTAPI __stdcall TLS_CALLBACK(PVOID DllHandle, DWORD dwReason, PVOID Reserved) //DllHandle模块句柄、Reason调用原因、 Reserved加载方式（显式/隐式）
@@ -250,20 +313,25 @@ int main(int argc, char* argv[])
     XString command(argv[1]);
     XString path(L"E:\\code\\邪王真眼\\XJyaoushingan\\Release\\1.exe");
 
-//     if (command == L"pe") 
-//         showpe(path); 
-//     else if (command == L"import") 
-//         showimport(path); 
-//     else if (command == L"export") 
-//         showexport(path); 
-//     else if (command == L"reload") 
-//         relocation(path);
-//     else if (command == L"resource")
-//         resource(path);
-//     else if (command == L"delayimport")
-//         delayimport(path);
-//     else if (command == L"threadload")
-            threadload(path);
+    fun1(path.w_cstr());
+
+
+    if (command == L"pe") 
+        showpe(path); 
+    else if (command == L"import") 
+        showimport(path); 
+    else if (command == L"export") 
+        showexport(path); 
+    else if (command == L"reload") 
+        relocation(path);
+    else if (command == L"resource")
+        resource(path);
+    else if (command == L"delayimport")
+        delayimport(path);
+    else if (command == L"threadload")
+        fun2(path.w_cstr());
+    else if (command == L"loadconfig")
+        fun1(path.w_cstr());
 	    
     return 0;
 } 

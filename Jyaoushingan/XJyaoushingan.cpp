@@ -927,6 +927,50 @@ XJyaoushingan::get_thread_local_storage(
     return false;
 }
 
+bool 
+XJyaoushingan::get_load_config_table(
+    XLOAD_CONFIG_TABLE& load_config)
+{
+    do
+    {
+        IMAGE_DATA_DIRECTORY load_config_table;
+        if (!get_data_dir(E_LOAD_CONFIG_TABLE, load_config_table))
+        {
+            break;
+        }
+
+        DWORD offset = rva_mem2file(load_config_table.VirtualAddress);
+        if (offset == 0)
+        {
+            break;
+        }
+
+        PIMAGE_LOAD_CONFIG_DIRECTORY lcc
+            = (PIMAGE_LOAD_CONFIG_DIRECTORY)GET_OFFSET_BUFFER(m_fp_bufer, offset);
+        if (lcc == NULL)
+        {
+            break;
+        }
+
+        memcpy((PVOID)&load_config.m_load_config, lcc, sizeof(IMAGE_LOAD_CONFIG_DIRECTORY));
+
+
+        offset = rva_mem2file(lcc->SEHandlerTable - m_pe->OptionalHeader.ImageBase); 
+        DWORD* she_table = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
+        for (DWORD i = 0; i < lcc->SEHandlerCount; i++)
+        {  
+            DWORD fun_address = rva_mem2file(she_table[i]);
+            fun_address = (DWORD)GET_OFFSET_BUFFER(m_fp_bufer, fun_address);
+         
+            load_config.m_seh_list.push_back(fun_address);
+        }
+
+
+        return true;
+    } while (false);
+    return false;
+}
+
 /*
 **  MZÍ·½âÎö
 */
