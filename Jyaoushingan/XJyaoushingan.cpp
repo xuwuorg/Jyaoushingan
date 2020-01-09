@@ -942,8 +942,7 @@ XJyaoushingan::get_load_config_table(
 bool
 XJyaoushingan::get_xxx_seg( 
     std::map<DWORD, DWORD>& out
-    , DWORD status
-    , DWORD unstatus/* = IMAGE_SCN_MEM_DISCARDABLE*/)
+    , DWORD status)
 {
     std::list<IMAGE_SECTION_HEADER> section;
     if (!get_section(section))
@@ -958,7 +957,7 @@ XJyaoushingan::get_xxx_seg(
     for (it; it != section.end(); it++)
     {
         if ((it->Characteristics & status)
-            && !(it->Characteristics & unstatus)
+            && !(it->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
             && it->VirtualAddress != recource.VirtualAddress)
         {
             out.insert(
@@ -975,20 +974,14 @@ bool
 XJyaoushingan::get_code_seg(
     std::map<DWORD, DWORD>& out)
 {
-    get_xxx_seg(
-        out
-        , IMAGE_SCN_MEM_EXECUTE);
-    return get_xxx_seg(
-        out
-        , IMAGE_SCN_CNT_CODE);
+    return get_xxx_seg(out, IMAGE_SCN_MEM_EXECUTE);
 }
 
 bool 
-XJyaoushingan::get_data_seg(std::map<DWORD, DWORD>& out)
+XJyaoushingan::get_data_seg(
+    std::map<DWORD, DWORD>& out)
 {
-    return get_xxx_seg(
-        out
-        , IMAGE_SCN_CNT_INITIALIZED_DATA);
+    return get_xxx_seg(out, IMAGE_SCN_CNT_INITIALIZED_DATA);
 }
 
 /*

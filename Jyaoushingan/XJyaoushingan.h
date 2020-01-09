@@ -525,8 +525,7 @@ private:
 
     bool get_xxx_seg(
         std::map<DWORD, DWORD>& out
-        , DWORD status
-        , DWORD unstatus = IMAGE_SCN_MEM_DISCARDABLE);
+        , DWORD status);
 private:
     //文件PE的存储路径
     XString m_file_path; 

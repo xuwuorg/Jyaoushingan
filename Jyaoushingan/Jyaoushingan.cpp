@@ -316,12 +316,11 @@ int main(int argc, char* argv[])
     XString path(L"E:\\code\\邪王真眼\\XJyaoushingan\\Release\\1.exe");
   
     XJyaoushingan pe;
-    //pe.set_file_path(path);
-    pe.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pe.set_file_path(path);
+    //pe.set_memory_buf((LPVOID)GetModuleHandle(NULL));
     pe.open(); 
     std::map<DWORD, DWORD> code;
-    //pe.get_code_seg(code);
-
+    pe.get_code_seg(code);
     pe.get_data_seg(code);
 
     std::map<DWORD, DWORD>::iterator it = code.begin();
@@ -330,14 +329,10 @@ int main(int argc, char* argv[])
         DWORD v = it->first;
         DWORD s = it->second;
 
-        XString str;
-        str << v << L"  " << s;
-        str.msgbox();
-        int i = 0;
-
+        printf("%08X %08X \r\n", v, s); 
     }
 
-    int i = 0;
+    MessageBox(0, 0, 0, 0);
 
     if (command == L"pe") 
         showpe(path); 
