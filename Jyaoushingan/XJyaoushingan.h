@@ -247,7 +247,7 @@ class XJyaoushingan
 public:
     XJyaoushingan(); 
     virtual ~XJyaoushingan();
-
+public: /* PE结构体信息获取成员方法 */
     /*
     **  设置本地文件路径
     **  param1：需要当中PE格式解析的文件路径
@@ -499,8 +499,34 @@ public:
     */
     bool get_load_config_table(XLOAD_CONFIG_TABLE& load_config);
 
+
+public: /* 扩展信息获取 */
+    /*
+    **  获得代码段
+    **  param1：输出参数，返回当前PE的所有资源表数据内容
+    **  返回值：如果获取成功返回true，否则返回false。
+    **  备注：
+    **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
+    **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
+    */
+    bool get_code_seg(std::map<DWORD, DWORD>& out);
+    /*
+    **  获得数据段
+    **  param1：输出参数，返回当前PE的所有资源表数据内容
+    **  返回值：如果获取成功返回true，否则返回false。
+    **  备注：
+    **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
+    **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
+    */
+    bool get_data_seg(std::map<DWORD, DWORD>& out);
+
 private:
     bool get_import_name_table(DWORD bridge, XIMPORT_FUN_TABLE& fun_table); 
+
+    bool get_xxx_seg(
+        std::map<DWORD, DWORD>& out
+        , DWORD status
+        , DWORD unstatus = IMAGE_SCN_MEM_DISCARDABLE);
 private:
     //文件PE的存储路径
     XString m_file_path; 

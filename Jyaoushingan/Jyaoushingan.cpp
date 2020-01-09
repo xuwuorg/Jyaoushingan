@@ -243,6 +243,7 @@ void fun1(const wchar_t* psz)
 
 void NTAPI __stdcall TLS_CALLBACK(PVOID DllHandle, DWORD dwReason, PVOID Reserved) //DllHandle模块句柄、Reason调用原因、 Reserved加载方式（显式/隐式）
 {
+    return;
     XString str((DWORD)TLS_CALLBACK);
     switch (dwReason)
     {
@@ -260,6 +261,7 @@ void NTAPI __stdcall TLS_CALLBACK(PVOID DllHandle, DWORD dwReason, PVOID Reserve
 
 void NTAPI __stdcall TLS_CALLBACK2(PVOID DllHandle, DWORD dwReason, PVOID Reserved) //DllHandle模块句柄、Reason调用原因、 Reserved加载方式（显式/隐式）
 {
+    return;
     switch (dwReason)
     {
     case DLL_THREAD_ATTACH:									//Reason会有4种参数
@@ -291,30 +293,51 @@ PIMAGE_TLS_CALLBACK _tls_callback[] = { TLS_CALLBACK, TLS_CALLBACK2,0 };
 int main(int argc, char* argv[])
 {  
 
-    if (argc < 2)
-    {
-        std::cout << "邪王真眼" << std::endl;
-        std::cout << "邪王真眼.exe pe filepath" << std::endl; 
-        std::cout << "邪王真眼.exe export filepath" << std::endl;
-        std::cout << "邪王真眼.exe import filepath" << std::endl;
-        std::cout << "邪王真眼.exe resource filepath" << std::endl;
-        std::cout << "邪王真眼.exe certificate filepath" << std::endl;
-        std::cout << "邪王真眼.exe relocation filepath" << std::endl;
-        std::cout << "邪王真眼.exe debuginfo filepath" << std::endl;
-        std::cout << "邪王真眼.exe globalpoint filepath" << std::endl;
-        std::cout << "邪王真眼.exe threadload filepath" << std::endl;
-        std::cout << "邪王真眼.exe loadconfig filepath" << std::endl;
-        std::cout << "邪王真眼.exe boundimport filepath" << std::endl;
-        std::cout << "邪王真眼.exe importaddress filepath" << std::endl;
-        std::cout << "邪王真眼.exe delayimport filepath" << std::endl;
-        //return 0;
-    }   
+//     if (argc < 2)
+//     {
+//         std::cout << "邪王真眼" << std::endl;
+//         std::cout << "邪王真眼.exe pe filepath" << std::endl; 
+//         std::cout << "邪王真眼.exe export filepath" << std::endl;
+//         std::cout << "邪王真眼.exe import filepath" << std::endl;
+//         std::cout << "邪王真眼.exe resource filepath" << std::endl;
+//         std::cout << "邪王真眼.exe certificate filepath" << std::endl;
+//         std::cout << "邪王真眼.exe relocation filepath" << std::endl;
+//         std::cout << "邪王真眼.exe debuginfo filepath" << std::endl;
+//         std::cout << "邪王真眼.exe globalpoint filepath" << std::endl;
+//         std::cout << "邪王真眼.exe threadload filepath" << std::endl;
+//         std::cout << "邪王真眼.exe loadconfig filepath" << std::endl;
+//         std::cout << "邪王真眼.exe boundimport filepath" << std::endl;
+//         std::cout << "邪王真眼.exe importaddress filepath" << std::endl;
+//         std::cout << "邪王真眼.exe delayimport filepath" << std::endl;
+//         //return 0;
+//     }   
      
     XString command(argv[1]);
     XString path(L"E:\\code\\邪王真眼\\XJyaoushingan\\Release\\1.exe");
+  
+    XJyaoushingan pe;
+    //pe.set_file_path(path);
+    pe.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pe.open(); 
+    std::map<DWORD, DWORD> code;
+    //pe.get_code_seg(code);
 
-    fun1(path.w_cstr());
+    pe.get_data_seg(code);
 
+    std::map<DWORD, DWORD>::iterator it = code.begin();
+    for (it; it != code.end(); it++)
+    {
+        DWORD v = it->first;
+        DWORD s = it->second;
+
+        XString str;
+        str << v << L"  " << s;
+        str.msgbox();
+        int i = 0;
+
+    }
+
+    int i = 0;
 
     if (command == L"pe") 
         showpe(path); 

@@ -933,6 +933,63 @@ XJyaoushingan::get_load_config_table(
     } while (false);
     return false;
 }
+ 
+
+/*
+**  MZ扩展信息获取
+*/
+
+bool
+XJyaoushingan::get_xxx_seg( 
+    std::map<DWORD, DWORD>& out
+    , DWORD status
+    , DWORD unstatus/* = IMAGE_SCN_MEM_DISCARDABLE*/)
+{
+    std::list<IMAGE_SECTION_HEADER> section;
+    if (!get_section(section))
+    {
+        return false;
+    }
+
+    IMAGE_DATA_DIRECTORY recource; 
+    get_data_dir(E_RESOURCE_TAB, recource); 
+
+    std::list<IMAGE_SECTION_HEADER>::iterator it = section.begin();
+    for (it; it != section.end(); it++)
+    {
+        if ((it->Characteristics & status)
+            && !(it->Characteristics & unstatus)
+            && it->VirtualAddress != recource.VirtualAddress)
+        {
+            out.insert(
+                std::pair<DWORD, DWORD>(
+                    it->VirtualAddress + m_pe->OptionalHeader.ImageBase
+                    , it->Misc.VirtualSize));
+        }
+    }
+
+    return !out.empty();
+}
+
+bool
+XJyaoushingan::get_code_seg(
+    std::map<DWORD, DWORD>& out)
+{
+    get_xxx_seg(
+        out
+        , IMAGE_SCN_MEM_EXECUTE);
+    return get_xxx_seg(
+        out
+        , IMAGE_SCN_CNT_CODE);
+}
+
+bool 
+XJyaoushingan::get_data_seg(std::map<DWORD, DWORD>& out)
+{
+    return get_xxx_seg(
+        out
+        , IMAGE_SCN_CNT_INITIALIZED_DATA);
+}
 
 /*
 **  MZ头解析
