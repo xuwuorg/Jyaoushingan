@@ -1,18 +1,19 @@
 ﻿// Eye Of the Evil King.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
 //
-
+#define WIN32_LEAN_AND_MEAN
 #include "pch.h"
 #include <iostream>
 #include <windows.h>
 #include "XJyaoushingan.h"
 #include "resource.h"
-#include <XString.h>
+#include "XString.h"
+#include <Psapi.h>
 
 void showpe(XString& path)
 {
     XJyaoushingan pec;
-    //pec.set_file_path(path);
-    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pec.set_file_path(path);
+    //pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
     if (!pec.open())
     {
         std::cout << "打开文件失败！" << std::endl;
@@ -58,10 +59,20 @@ void showpe(XString& path)
             return  ;
         }
 
-        IMAGE_OPTIONAL_HEADER option_head;
-        pec.get_option_head(option_head);
-        XOptionHeadStream ohs(option_head);
-        std::cout << ohs.to_string().get_str().c_str() << std::endl;
+        if (pec.is_x64())
+        {
+            IMAGE_OPTIONAL_HEADER64 option_head;
+            pec.get_option_head64(option_head);
+            XOptionHeadStream ohs((void*)&option_head, true);
+            std::cout << ohs.to_string().get_str().c_str() << std::endl;
+        } 
+        else
+        {
+            IMAGE_OPTIONAL_HEADER32 option_head;
+            pec.get_option_head32(option_head);
+            XOptionHeadStream ohs((void*)&option_head, false);
+            std::cout << ohs.to_string().get_str().c_str() << std::endl;
+        } 
 
         std::map<E_DATA_DIR_TABLE, IMAGE_DATA_DIRECTORY> data_dir;
         pec.get_data_dir(data_dir);
@@ -90,8 +101,8 @@ void showpe(XString& path)
 void showimport(XString& file_path)
 { 
     XJyaoushingan pec;
-    //pec.set_file_path(path);
-    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pec.set_file_path(file_path);
+    //pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
     if (!pec.open())
     {
         std::cout << "打开文件失败！" << std::endl;
@@ -106,8 +117,8 @@ void showimport(XString& file_path)
 void showexport(XString& file_path)
 {
     XJyaoushingan pec;
-    //pec.set_file_path(path);
-    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pec.set_file_path(file_path);
+    //pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
     if (!pec.open())
     {
         std::cout << "打开文件失败！" << std::endl;
@@ -121,8 +132,8 @@ void showexport(XString& file_path)
 void relocation(XString& file_path)
 {
     XJyaoushingan pec;
-    //pec.set_file_path(path);
-    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pec.set_file_path(file_path);
+    //pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
     if (!pec.open())
     {
         std::cout << "打开文件失败！" << std::endl;
@@ -136,8 +147,8 @@ void relocation(XString& file_path)
 void resource(XString& file_path)
 {
     XJyaoushingan pec;
-    //pec.set_file_path(file_path);
-    pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+    pec.set_file_path(file_path);
+    //pec.set_memory_buf((LPVOID)GetModuleHandle(NULL));
 	if (!pec.open())
 	{
 		std::cout << "打开文件失败！" << std::endl;
@@ -244,18 +255,18 @@ void fun1(const wchar_t* psz)
 void NTAPI __stdcall TLS_CALLBACK(PVOID DllHandle, DWORD dwReason, PVOID Reserved) //DllHandle模块句柄、Reason调用原因、 Reserved加载方式（显式/隐式）
 {
     return;
-    XString str((DWORD)TLS_CALLBACK);
-    switch (dwReason)
-    {
-    case DLL_THREAD_ATTACH:									//Reason会有4种参数
-        MessageBox(0, L"TLS函数DLL_THREAD_ATTACH1", L"TLS", 0); break;
-    case DLL_PROCESS_ATTACH:									//debug
-        MessageBox(0, str.w_cstr(), L"TLS", 0); break;
-    case DLL_THREAD_DETACH:
-        MessageBox(0, L"TLS函数DLL_THREAD_DETACH1", L"TLS", 0); break;
-    case DLL_PROCESS_DETACH:
-        MessageBox(0, L"TLS函数DLL_PROCESS_DETACH1", L"TLS", 0); break;
-    }
+//     XString str((DWORD)TLS_CALLBACK);
+//     switch (dwReason)
+//     {
+//     case DLL_THREAD_ATTACH:									//Reason会有4种参数
+//         MessageBox(0, L"TLS函数DLL_THREAD_ATTACH1", L"TLS", 0); break;
+//     case DLL_PROCESS_ATTACH:									//debug
+//         MessageBox(0, str.w_cstr(), L"TLS", 0); break;
+//     case DLL_THREAD_DETACH:
+//         MessageBox(0, L"TLS函数DLL_THREAD_DETACH1", L"TLS", 0); break;
+//     case DLL_PROCESS_DETACH:
+//         MessageBox(0, L"TLS函数DLL_PROCESS_DETACH1", L"TLS", 0); break;
+//     }
 
 } 
 
@@ -275,6 +286,8 @@ void NTAPI __stdcall TLS_CALLBACK2(PVOID DllHandle, DWORD dwReason, PVOID Reserv
     }
 
 }
+
+/* 
   
 //使用TLS需要在程序中新建一个data段专门存放TLS数据，
 //并且需要通知链接器在PE头中添加相关数据，所以有了这一段代码
@@ -288,13 +301,13 @@ EXTERN_C
 //但是不能使用“.CRT$XLA”和“.CRT$XLZ”，因为“.CRT$XLA”和“.CRT$XLZ”是用于tlssup.obj的。
 PIMAGE_TLS_CALLBACK _tls_callback[] = { TLS_CALLBACK, TLS_CALLBACK2,0 };
 #pragma data_seg ()
- 
+ */
  
 int main(int argc, char* argv[])
 {  
 
-//     if (argc < 2)
-//     {
+    if (argc < 2)
+    {
 //         std::cout << "邪王真眼" << std::endl;
 //         std::cout << "邪王真眼.exe pe filepath" << std::endl; 
 //         std::cout << "邪王真眼.exe export filepath" << std::endl;
@@ -309,47 +322,53 @@ int main(int argc, char* argv[])
 //         std::cout << "邪王真眼.exe boundimport filepath" << std::endl;
 //         std::cout << "邪王真眼.exe importaddress filepath" << std::endl;
 //         std::cout << "邪王真眼.exe delayimport filepath" << std::endl;
-//         //return 0;
-//     }   
-     
-    XString command(argv[1]);
-    XString path(L"E:\\code\\邪王真眼\\XJyaoushingan\\Release\\1.exe");
+        //return 0;
+    }   
+
+//     PROCESS_INFORMATION pi = { 0x0 };
+//     STARTUPINFO si = { sizeof(si) };
+//     CreateProcessW(
+//         L"E:\\code\\邪王真眼\\XJyaoushingan\\Release\\1.exe"
+//         , L""
+//         , NULL
+//         , NULL
+//         , FALSE
+//         , CREATE_SUSPENDED
+//         , NULL
+//         , NULL
+//         , &si
+//         , &pi);
+// 
+//     HANDLE handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pi.dwProcessId);
+    
+    
   
-    XJyaoushingan pe;
-    pe.set_file_path(path);
-    //pe.set_memory_buf((LPVOID)GetModuleHandle(NULL));
-    pe.open(); 
-    std::map<DWORD, DWORD> code;
-    pe.get_code_seg(code);
-    pe.get_data_seg(code);
-
-    std::map<DWORD, DWORD>::iterator it = code.begin();
-    for (it; it != code.end(); it++)
-    {
-        DWORD v = it->first;
-        DWORD s = it->second;
-
-        printf("%08X %08X \r\n", v, s); 
-    }
-
-    MessageBox(0, 0, 0, 0);
-
-    if (command == L"pe") 
-        showpe(path); 
-    else if (command == L"import") 
-        showimport(path); 
-    else if (command == L"export") 
-        showexport(path); 
-    else if (command == L"reload") 
-        relocation(path);
-    else if (command == L"resource")
-        resource(path);
-    else if (command == L"delayimport")
-        delayimport(path);
-    else if (command == L"threadload")
-        fun2(path.w_cstr());
-    else if (command == L"loadconfig")
-        fun1(path.w_cstr());
+    XString path(L"E:\\邪王真眼\\XJyaoushingan\\x64\\Release\\Jyaoushingan - 副本.exe");
+//     XJyaoushingan pe;
+//     //pe.set_file_path(path);
+//     pe.set_memory_buf((LPVOID)GetModuleHandle(NULL));
+//     pe.open(); 
+//     std::map<DWORD, DWORD> code;
+//     pe.get_code_seg(code);
+//     pe.get_data_seg(code);
+// 
+//     std::map<DWORD, DWORD>::iterator it = code.begin();
+//     for (it; it != code.end(); it++)
+//     {
+//         DWORD v = it->first;
+//         DWORD s = it->second;
+// 
+//         printf("%08X %08X \r\n", v, s); 
+//     }
+     
+    showpe(path);
+    showimport(path);
+    showexport(path);
+    relocation(path);
+    resource(path);
+    delayimport(path);
+//         fun2(path.w_cstr());
+//         fun1(path.w_cstr());
 	    
     return 0;
 } 

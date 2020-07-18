@@ -1,4 +1,5 @@
-#include "pch.h"
+ 
+#define WIN32_LEAN_AND_MEAN
 #include "XJyaoushingan.h"
 #include <time.h>
      
@@ -24,10 +25,16 @@ break; \
 }\
 OUT_POINT = (OUT_POINT_TYPE)GET_OFFSET_BUFFER(m_fp_bufer, offset_name); \
 }
-
-#define GET_OFFSET_BUFFER(p, o) (LPVOID)((DWORD)p + o) 
+  
 #define PE_SIGN 4
 
+#ifdef _WIN64
+typedef ULONGLONG XPOINT;
+#else 
+typedef DWORD XPOINT;
+#endif
+ 
+#define GET_OFFSET_BUFFER(p, o) (LPVOID)((XPOINT)p + o)
 
 WCHAR g_resource_name[16][16] = { L"光标", L"位图", L"图标", L"菜单", L"对话框",
                                 L"字符串", L"字体目录", L"字体", L"快捷键", L"未格式化资源",
@@ -38,14 +45,18 @@ XJyaoushingan::XJyaoushingan()
     , m_fp_handle(INVALID_HANDLE_VALUE)
     , m_fp_map(INVALID_HANDLE_VALUE)
     , m_fp_bufer(NULL)
-    , m_err(0)
+    , m_err(0) 
     , m_mz(NULL)
     , m_bis_mz(false)
+    , m_x64(false)
     , m_pe(NULL)
+    , m_file_head(NULL)
+    , m_option_x86(NULL)
+    , m_option_x64(NULL)
     , m_bis_pe(false)
     , m_section(NULL)
     , m_bis_section(false)
-    , m_section_count(0)
+    , m_section_count(0) 
 
 {
 }
@@ -89,6 +100,9 @@ XJyaoushingan::close()
     m_bis_mz = false;
 
     m_pe = NULL;
+    m_file_head = NULL;
+    m_option_x86 = NULL;
+    m_option_x64 = NULL;
     m_bis_pe = false;
 
     m_section = NULL;
@@ -127,7 +141,7 @@ XJyaoushingan::open()
     do
     {
         m_fp_handle = ::CreateFile(
-            m_file_path.w_cstr()
+            m_file_path.wc_str()
             , GENERIC_READ | GENERIC_WRITE
             , 0
             , NULL
@@ -248,11 +262,30 @@ XJyaoushingan::is_pe()
         return false;
     }
 
-    m_pe = (PIMAGE_NT_HEADERS)GET_OFFSET_BUFFER(m_fp_bufer, offset);
-    if (m_pe->Signature != 0x4550)
+    m_pe = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
+    if (*m_pe != 0x4550)
     {
         m_pe = NULL;
         m_bis_pe = false;
+        return false;
+    }
+
+    m_file_head = (PIMAGE_FILE_HEADER)((ULONGLONG)m_pe + sizeof(DWORD));
+    if (m_file_head->Machine == 0x014c)
+    {
+        m_x64 = false;
+        m_option_x86 = (PIMAGE_OPTIONAL_HEADER32)((ULONGLONG)m_file_head + sizeof(IMAGE_FILE_HEADER));
+    }
+    else if (m_file_head->Machine == 0x8664)
+    {
+        m_x64 = true;
+        m_option_x64 = (PIMAGE_OPTIONAL_HEADER64)((ULONGLONG)m_file_head + sizeof(IMAGE_FILE_HEADER));
+    }
+    else
+    {
+        m_pe = NULL;
+        m_bis_pe = false;
+        return false;
     }
 
     m_bis_pe = true;
@@ -268,8 +301,14 @@ XJyaoushingan::get_file_head(
         return false;
     }
 
-    memcpy(&file_head, &m_pe->FileHeader, sizeof(IMAGE_FILE_HEADER));
+    memcpy(&file_head, m_file_head, sizeof(IMAGE_FILE_HEADER));
     return true;
+}
+
+bool 
+XJyaoushingan::is_x64()
+{     
+    return m_x64;
 }
 
 bool 
@@ -281,20 +320,33 @@ XJyaoushingan::set_file_head(
         return false;
     }
 
-    memcpy(&m_pe->FileHeader, &file_head, sizeof(IMAGE_FILE_HEADER));
+    memcpy(m_file_head, &file_head, sizeof(IMAGE_FILE_HEADER));
     return true;
 }
 
 bool 
-XJyaoushingan::get_option_head(
-    IMAGE_OPTIONAL_HEADER & option_head)
+XJyaoushingan::get_option_head32(
+    IMAGE_OPTIONAL_HEADER32& option_head)
 {
     if (!is_pe())
     {
         return false;
     }
+     
+    memcpy(&option_head, m_option_x86, sizeof(IMAGE_OPTIONAL_HEADER32));
+    return true;
+}
 
-    memcpy(&option_head, &m_pe->OptionalHeader, sizeof(IMAGE_OPTIONAL_HEADER));
+bool 
+XJyaoushingan::get_option_head64(
+    IMAGE_OPTIONAL_HEADER64 & option_head)
+{
+    if (!is_pe())
+    {
+        return false;
+    }
+     
+    memcpy(&option_head, m_option_x64, sizeof(IMAGE_OPTIONAL_HEADER64));
     return true;
 }
 
@@ -307,7 +359,14 @@ XJyaoushingan::set_option_head(
         return false;
     }
 
-    memcpy(&m_pe->OptionalHeader, &option_head, sizeof(IMAGE_OPTIONAL_HEADER));
+    if (m_x64)
+    {
+        memcpy(m_option_x64, &option_head, sizeof(IMAGE_OPTIONAL_HEADER));
+    } 
+    else
+    {
+        memcpy(m_option_x86, &option_head, sizeof(IMAGE_OPTIONAL_HEADER));
+    }
     return true;
 }
 
@@ -326,7 +385,14 @@ XJyaoushingan::get_data_dir(
         return false;
     }
 
-    memcpy(&data_dir, &m_pe->OptionalHeader.DataDirectory[dd], sizeof(IMAGE_DATA_DIRECTORY));
+    if (m_x64)
+    {
+        memcpy(&data_dir, &m_option_x64->DataDirectory[dd], sizeof(IMAGE_DATA_DIRECTORY));
+    }
+    else
+    {
+        memcpy(&data_dir, &m_option_x86->DataDirectory[dd], sizeof(IMAGE_DATA_DIRECTORY));
+    } 
     return true;
 }
 
@@ -342,7 +408,15 @@ XJyaoushingan::get_data_dir(
     for (int i = 0; i <= E_RESERVED; i++)
     {
         IMAGE_DATA_DIRECTORY dd;
-        memcpy(&dd, &m_pe->OptionalHeader.DataDirectory[i], sizeof(IMAGE_DATA_DIRECTORY));
+        if (m_x64)
+        {
+            memcpy(&dd, &m_option_x64->DataDirectory[i], sizeof(IMAGE_DATA_DIRECTORY));
+        }
+        else
+        {
+            memcpy(&dd, &m_option_x86->DataDirectory[i], sizeof(IMAGE_DATA_DIRECTORY));
+        } 
+
         data_dir.insert(std::pair<E_DATA_DIR_TABLE, IMAGE_DATA_DIRECTORY>((E_DATA_DIR_TABLE)i, dd));
     }
 
@@ -364,7 +438,14 @@ XJyaoushingan::set_data_dir(
         return false;
     }
 
-    memcpy(&m_pe->OptionalHeader.DataDirectory[dd], &data_dir, sizeof(IMAGE_DATA_DIRECTORY));
+    if (m_x64)
+    {
+        memcpy(&m_option_x64->DataDirectory[dd], &data_dir, sizeof(IMAGE_DATA_DIRECTORY));
+    }
+    else
+    {
+        memcpy(&m_option_x86->DataDirectory[dd], &data_dir, sizeof(IMAGE_DATA_DIRECTORY));
+    } 
     return true;
 }
 
@@ -383,14 +464,15 @@ XJyaoushingan::is_section()
     {
         return false;
     }
-      
+     
     DWORD section_offset = get_pe_offset()
         + PE_SIGN
         + sizeof(IMAGE_FILE_HEADER)
         + file_head.SizeOfOptionalHeader;
 
-    m_section 
+    m_section
         = (PIMAGE_SECTION_HEADER)GET_OFFSET_BUFFER(m_fp_bufer, section_offset);
+         
     m_section_count = file_head.NumberOfSections;
     return true;
 }
@@ -581,18 +663,37 @@ XJyaoushingan::get_import_name_table(
     DWORD bridge
     , XIMPORT_FUN_TABLE& fun_table)
 {
-    DWORD* import_name_table = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, bridge);
-    for (; *import_name_table != 0; import_name_table++)
+    if (is_x64())
     {
-        DWORD fa = rva_mem2file(*import_name_table);
-        PIMAGE_IMPORT_BY_NAME import_name = (PIMAGE_IMPORT_BY_NAME)GET_OFFSET_BUFFER(m_fp_bufer, fa);
+        ULONGLONG* import_name_table = (ULONGLONG*)GET_OFFSET_BUFFER(m_fp_bufer, bridge);
+        for (; *import_name_table != 0; import_name_table++)
+        {
+            ULONGLONG fa = rva_mem2file(*import_name_table);
+            PIMAGE_IMPORT_BY_NAME import_name = (PIMAGE_IMPORT_BY_NAME)GET_OFFSET_BUFFER(m_fp_bufer, fa);
 
-        XIMPORT_FUN_NAME_TABLE table;
-        table.set_address(0);
-        table.set_index(import_name->Hint);
-        table.set_name((const char*)import_name->Name);
+            XIMPORT_FUN_NAME_TABLE table;
+            table.set_address_x64(fa);
+            table.set_index(import_name->Hint);
+            table.set_name((const char*)import_name->Name);
 
-        fun_table.push_back(table);
+            fun_table.push_back(table);
+        }
+    }
+    else
+    {
+        DWORD* import_name_table = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, bridge);
+        for (; *import_name_table != 0; import_name_table++)
+        {
+            DWORD fa = rva_mem2file(*import_name_table);
+            PIMAGE_IMPORT_BY_NAME import_name = (PIMAGE_IMPORT_BY_NAME)GET_OFFSET_BUFFER(m_fp_bufer, fa);
+
+            XIMPORT_FUN_NAME_TABLE table;
+            table.set_address_x86(fa);
+            table.set_index(import_name->Hint);
+            table.set_name((const char*)import_name->Name);
+
+            fun_table.push_back(table);
+        }
     }
 
     return true;
@@ -615,7 +716,7 @@ XJyaoushingan::get_exportable(
         DWORD name_pos = rva_mem2file(export_descriptor->Name);
         char* name = (char*)GET_OFFSET_BUFFER(m_fp_bufer, name_pos);
         XString dll_name(name);
-
+         
         DWORD offset = rva_mem2file(export_descriptor->AddressOfNameOrdinals);
         WORD* AddressOfNameOrdinals = (WORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
 
@@ -625,14 +726,26 @@ XJyaoushingan::get_exportable(
         offset = rva_mem2file(export_descriptor->AddressOfFunctions);
         DWORD* AddressOfFunctions = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
 
-        IMAGE_OPTIONAL_HEADER option;
-        if (!get_option_head(option))
-        {
-            break;
-        }
-
         expdata.m_name = dll_name;
-        expdata.m_base = option.ImageBase;
+
+        if (is_x64())
+        {
+            IMAGE_OPTIONAL_HEADER64 option;
+            if (!get_option_head64(option))
+            {
+                break;
+            }
+            expdata.m_basex64 = option.ImageBase;
+        }
+        else
+        {
+            IMAGE_OPTIONAL_HEADER32 option;
+            if (!get_option_head32(option))
+            {
+                break;
+            }
+            expdata.m_basex86 = option.ImageBase;
+        } 
 
         for (DWORD i = 0; i < export_descriptor->NumberOfNames; i++)
         {
@@ -642,11 +755,20 @@ XJyaoushingan::get_exportable(
             const char* exp_name = (const char*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
             XString xname(exp_name);
 
-            DWORD fun_address = option.ImageBase + *AddressOfFunctions;
+            if (is_x64())
+            {
+                ULONGLONG fun_address = expdata.m_basex64 + *AddressOfFunctions;
+                XEXPORT_FUN_NAME_TABLE data(index, xname, fun_address);
+                expdata.m_fun_table.push_back(data);
+            }
+            else
+            { 
+                DWORD fun_address = expdata.m_basex86 + *AddressOfFunctions;
 
-            XEXPORT_FUN_NAME_TABLE data(index, xname, fun_address);
-            expdata.m_fun_table.push_back(data);
-
+                XEXPORT_FUN_NAME_TABLE data(index, xname, fun_address);
+                expdata.m_fun_table.push_back(data);
+            } 
+             
             AddressOfNameOrdinals++;
             AddressOfNames++;
             AddressOfFunctions++;
@@ -693,16 +815,20 @@ XJyaoushingan::get_relocation(
                 XRELOCATION_DATA data;
                 data.m_section_name = (char*)section.Name;
 
-                WORD* pblock = (WORD*)((DWORD)relocation_descriptor + sizeof(IMAGE_BASE_RELOCATION));
+                WORD* pblock = nullptr; 
+                pblock = (WORD*)((XPOINT)relocation_descriptor + sizeof(IMAGE_BASE_RELOCATION));
+                 
                 for (DWORD block_index = 0
                     ; block_index < (relocation_descriptor->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2
                     ; block_index++)
                 {
-                    WORD block = pblock[block_index];
+                    DWORD block = pblock[block_index];
 
                     XRELOCATION_DATA_SUB subdata;
+                     
                     subdata.m_type = (block & 0xF000) / 0x1000;
-                    subdata.m_reloaction_offset = (block & 0x0FFF);
+                    subdata.m_reloaction_offset = (block & 0x0FFF) + relocation_descriptor->VirtualAddress;
+                        
 
                     data.m_sub_data.push_back(subdata);
                 }
@@ -722,7 +848,7 @@ XJyaoushingan::get_relocation(
 
 bool 
 XJyaoushingan::get_resource(
-    std::list<XRESOURCE_DATA> list_data)
+    std::list<XRESOURCE_DATA>& list_data)
 {
     do
     {
@@ -736,8 +862,8 @@ XJyaoushingan::get_resource(
           
         DWORD rs = rd_root->NumberOfIdEntries + rd_root->NumberOfNamedEntries;
 
-        PIMAGE_RESOURCE_DIRECTORY_ENTRY rde =
-            (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((DWORD)rd_root + sizeof(IMAGE_RESOURCE_DIRECTORY));
+        PIMAGE_RESOURCE_DIRECTORY_ENTRY rde 
+            = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((XPOINT)rd_root + sizeof(IMAGE_RESOURCE_DIRECTORY));
 
         for (DWORD index = 0; index < rs; index++, rde++)
         {
@@ -746,8 +872,8 @@ XJyaoushingan::get_resource(
             XString name1;
             if (rde->NameIsString == 1)
             {
-                PIMAGE_RESOURCE_DIR_STRING_U resource_dir_string =
-                    (PIMAGE_RESOURCE_DIR_STRING_U)((DWORD)rd_root + rde->NameOffset);
+                PIMAGE_RESOURCE_DIR_STRING_U resource_dir_string = nullptr;
+                resource_dir_string = (PIMAGE_RESOURCE_DIR_STRING_U)((XPOINT)rd_root + rde->NameOffset);
 
                 data.m_name_dir1 = resource_dir_string->NameString;
             }
@@ -763,13 +889,13 @@ XJyaoushingan::get_resource(
                 } 
             }
 
-            PIMAGE_RESOURCE_DIRECTORY rd2
-                = (PIMAGE_RESOURCE_DIRECTORY)((DWORD)rd_root + rde->OffsetToDirectory);
+            PIMAGE_RESOURCE_DIRECTORY rd2 = nullptr;
+            rd2 = (PIMAGE_RESOURCE_DIRECTORY)((XPOINT)rd_root + rde->OffsetToDirectory);
 
             DWORD rs2 = rd2->NumberOfIdEntries + rd2->NumberOfNamedEntries;
 
-            PIMAGE_RESOURCE_DIRECTORY_ENTRY rde2 =
-                (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((DWORD)rd2 + sizeof(IMAGE_RESOURCE_DIRECTORY));
+            PIMAGE_RESOURCE_DIRECTORY_ENTRY rde2 = nullptr;
+            rde2 = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((XPOINT)rd2 + sizeof(IMAGE_RESOURCE_DIRECTORY));
 
             for (DWORD index2 = 0; index2 < rs2; index2++, rde2++)
             {
@@ -792,14 +918,15 @@ XJyaoushingan::get_resource(
                 }
 
                 //解析第三层 
-                PIMAGE_RESOURCE_DIRECTORY pResD3
-                    = (PIMAGE_RESOURCE_DIRECTORY)((DWORD)rd_root + rde2->OffsetToDirectory);
+                PIMAGE_RESOURCE_DIRECTORY pResD3 = nullptr;
+                pResD3 = (PIMAGE_RESOURCE_DIRECTORY)((XPOINT)rd_root + rde2->OffsetToDirectory);
 
-                PIMAGE_RESOURCE_DIRECTORY_ENTRY pResDE3
-                    = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((long)pResD3 + sizeof(IMAGE_RESOURCE_DIRECTORY));
+                PIMAGE_RESOURCE_DIRECTORY_ENTRY pResDE3 = nullptr;
+                pResDE3 = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)
+                    ((XPOINT)pResD3 + sizeof(IMAGE_RESOURCE_DIRECTORY));
 
-                PIMAGE_RESOURCE_DATA_ENTRY pResDataE
-                    = (PIMAGE_RESOURCE_DATA_ENTRY)((DWORD)rd_root + pResDE3->OffsetToData);
+                PIMAGE_RESOURCE_DATA_ENTRY pResDataE = nullptr;
+                pResDataE = (PIMAGE_RESOURCE_DATA_ENTRY)((XPOINT)rd_root + pResDE3->OffsetToData);
 
                 data.m_page_code = pResDE3->Id;
 
@@ -883,7 +1010,16 @@ XJyaoushingan::get_thread_local_storage(
           
         memcpy((PVOID)&tls_data.m_tls_dir, ptd, sizeof(IMAGE_TLS_DIRECTORY));
 
-        DWORD callback_fun = ptd->AddressOfCallBacks - m_pe->OptionalHeader.ImageBase;
+        DWORD callback_fun = 0;
+        if (m_x64)
+        {
+            callback_fun = ptd->AddressOfCallBacks - m_option_x64->ImageBase;
+        }
+        else
+        {
+            callback_fun = ptd->AddressOfCallBacks - m_option_x86->ImageBase;
+        } 
+
         callback_fun = rva_mem2file(callback_fun);
         DWORD* pos = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, callback_fun);
         if (IsBadReadPtr(pos, sizeof(DWORD)))
@@ -918,8 +1054,17 @@ XJyaoushingan::get_load_config_table(
             , lcc); 
 
         memcpy((PVOID)&load_config.m_load_config, lcc, sizeof(IMAGE_LOAD_CONFIG_DIRECTORY));
-         
-        DWORD offset = rva_mem2file(lcc->SEHandlerTable - m_pe->OptionalHeader.ImageBase); 
+        
+        DWORD offset = 0;
+        if (m_x64)
+        {
+            offset = rva_mem2file(lcc->SEHandlerTable - m_option_x64->ImageBase);
+        }
+        else
+        {
+            offset = rva_mem2file(lcc->SEHandlerTable - m_option_x86->ImageBase);
+        }
+
         DWORD* she_table = (DWORD*)GET_OFFSET_BUFFER(m_fp_bufer, offset);
         for (DWORD i = 0; i < lcc->SEHandlerCount; i++)
         {  
@@ -960,10 +1105,20 @@ XJyaoushingan::get_xxx_seg(
             && !(it->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
             && it->VirtualAddress != recource.VirtualAddress)
         {
-            out.insert(
-                std::pair<DWORD, DWORD>(
-                    it->VirtualAddress + m_pe->OptionalHeader.ImageBase
-                    , it->Misc.VirtualSize));
+            if (m_x64)
+            {
+                out.insert(
+                    std::pair<DWORD, DWORD>(
+                        it->VirtualAddress + m_option_x64->ImageBase
+                        , it->Misc.VirtualSize));
+            }
+            else
+            {
+                out.insert(
+                    std::pair<DWORD, DWORD>(
+                        it->VirtualAddress + m_option_x86->ImageBase
+                        , it->Misc.VirtualSize));
+            } 
         }
     }
 
@@ -1253,27 +1408,38 @@ XFileHeadStream::Characteristics()
 }
  
 XOptionHeadStream::XOptionHeadStream(
-    const IMAGE_OPTIONAL_HEADER& option_head)
-    : m_option_head(NULL)
+    void* option_head
+    , bool x64)
+    : m_option_head32(NULL)
+    , m_option_head64(NULL)
 {
-    init(option_head);
+    init(option_head, x64);
 }
 
 XOptionHeadStream::~XOptionHeadStream()
 {
-    m_option_head = NULL;
+    m_option_head32 = NULL;
+    m_option_head64 = NULL;
 }
 
 void 
 XOptionHeadStream::init(
-    const IMAGE_OPTIONAL_HEADER& option_head)
+    void* option_head
+    , bool x64)
 {
-    m_option_head = &option_head;
+    if (x64)
+    {
+        m_option_head64 = (PIMAGE_OPTIONAL_HEADER64)&option_head;
+    }
+    else
+    {
+        m_option_head32 = (PIMAGE_OPTIONAL_HEADER32)&option_head;
+    } 
 }
 
 XString XOptionHeadStream::to_string()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head); 
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32); 
 
     XString str;
     str << L"选项头: \r\n";
@@ -1314,438 +1480,785 @@ XString XOptionHeadStream::to_string()
 XString 
 XOptionHeadStream::Magic()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
     XString str;
 
-    if (m_option_head->Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+    if (m_option_head32 != nullptr)
     {
-        str << L"32位可执行文件";
+        if (m_option_head32->Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+        {
+            str << L"32位可执行文件";
+        }
+        else if (m_option_head32->Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        {
+            str << L"64位可执行文件";
+        }
+        else if (m_option_head32->Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        {
+            str << L"ROM映像文件";
+        }
     }
-    else if (m_option_head->Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+    else if (m_option_head64 != nullptr)
     {
-        str << L"64位可执行文件";
+        if (m_option_head64->Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+        {
+            str << L"32位可执行文件";
+        }
+        else if (m_option_head64->Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        {
+            str << L"64位可执行文件";
+        }
+        else if (m_option_head64->Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        {
+            str << L"ROM映像文件";
+        }
     }
-    else if (m_option_head->Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
-    {
-        str << L"ROM映像文件";
-    }
-
+      
     return str;
 }
 
 XString 
 XOptionHeadStream::MajorLinkerVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
-
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
+     
     XString str;
-    str << m_option_head->MajorLinkerVersion;
+
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MajorLinkerVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MajorLinkerVersion;
+    } 
+
     return str;
 }
 
 XString 
 XOptionHeadStream::MinorLinkerVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MinorLinkerVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MinorLinkerVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MinorLinkerVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfCode()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfCode;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfCode;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfCode;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfInitializedData()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfInitializedData;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfInitializedData;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfInitializedData;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfUninitializedData()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfUninitializedData;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfUninitializedData;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfUninitializedData;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::AddressOfEntryPoint()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->AddressOfEntryPoint;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->AddressOfEntryPoint;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->AddressOfEntryPoint;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::BaseOfCode()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->BaseOfCode;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->BaseOfCode;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->BaseOfCode;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::BaseOfData()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->BaseOfData;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->BaseOfData;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        //str << m_option_head64->BaseOfData;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::ImageBase()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->ImageBase;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->ImageBase;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->ImageBase;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SectionAlignment()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SectionAlignment;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SectionAlignment;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SectionAlignment;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::FileAlignment()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->FileAlignment;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->FileAlignment;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->FileAlignment;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::MajorOperatingSystemVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MajorOperatingSystemVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MajorOperatingSystemVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MajorOperatingSystemVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::MinorOperatingSystemVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MinorOperatingSystemVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MinorOperatingSystemVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MinorOperatingSystemVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::MajorImageVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MajorImageVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MajorImageVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MajorImageVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::MinorImageVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MinorImageVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MinorImageVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MinorImageVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::MajorSubsystemVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MajorSubsystemVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MajorSubsystemVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MajorSubsystemVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::MinorSubsystemVersion()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->MinorSubsystemVersion;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->MinorSubsystemVersion;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->MinorSubsystemVersion;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::Win32VersionValue()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->Win32VersionValue;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->Win32VersionValue;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->Win32VersionValue;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfImage()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfImage;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfImage;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfImage;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfHeaders()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfHeaders;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfHeaders;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfHeaders;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::CheckSum()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->CheckSum;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->CheckSum;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->CheckSum;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::Subsystem()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
-
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
+     
     XString str;
-    switch (m_option_head->Subsystem)
+    if (m_option_head32 != nullptr)
     {
-    case IMAGE_SUBSYSTEM_UNKNOWN:
-        str << L"未知子系统";
-        break;
+        switch (m_option_head32->Subsystem)
+        {
+        case IMAGE_SUBSYSTEM_UNKNOWN:
+            str << L"未知子系统";
+            break;
 
-    case IMAGE_SUBSYSTEM_NATIVE:
-        str << L"无需子系统（设备驱动程序）";
-        break;
+        case IMAGE_SUBSYSTEM_NATIVE:
+            str << L"无需子系统（设备驱动程序）";
+            break;
 
-    case IMAGE_SUBSYSTEM_WINDOWS_GUI:
-        str << L"Windows图形界面程序";
-        break;
+        case IMAGE_SUBSYSTEM_WINDOWS_GUI:
+            str << L"Windows图形界面程序";
+            break;
 
-    case IMAGE_SUBSYSTEM_WINDOWS_CUI:
-        str << L"Windows字符模式（控制台程序）";
-        break;
+        case IMAGE_SUBSYSTEM_WINDOWS_CUI:
+            str << L"Windows字符模式（控制台程序）";
+            break;
 
-    case IMAGE_SUBSYSTEM_OS2_CUI:
-        str << L"OS / 2 CUI子系统。";
-        break;
+        case IMAGE_SUBSYSTEM_OS2_CUI:
+            str << L"OS / 2 CUI子系统。";
+            break;
 
-    case IMAGE_SUBSYSTEM_POSIX_CUI:
-        str << L"POSIX CUI子系统。";
-        break;
+        case IMAGE_SUBSYSTEM_POSIX_CUI:
+            str << L"POSIX CUI子系统。";
+            break;
 
-    case IMAGE_SUBSYSTEM_WINDOWS_CE_GUI:
-        str << L"Windows CE系统。";
-        break;
+        case IMAGE_SUBSYSTEM_WINDOWS_CE_GUI:
+            str << L"Windows CE系统。";
+            break;
 
-    case IMAGE_SUBSYSTEM_EFI_APPLICATION:
-        str << L"可扩展固件接口（EFI）应用程序。";
-        break;
+        case IMAGE_SUBSYSTEM_EFI_APPLICATION:
+            str << L"可扩展固件接口（EFI）应用程序。";
+            break;
 
-    case IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER:
-        str << L"带引导服务的EFI驱动程序。";
-        break;
+        case IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER:
+            str << L"带引导服务的EFI驱动程序。";
+            break;
 
-    case IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER:
-        str << L"具有运行时服务的EFI驱动程序。";
-        break;
+        case IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER:
+            str << L"具有运行时服务的EFI驱动程序。";
+            break;
 
-    case IMAGE_SUBSYSTEM_EFI_ROM:
-        str << L"EFI ROM映像。";
-        break;
+        case IMAGE_SUBSYSTEM_EFI_ROM:
+            str << L"EFI ROM映像。";
+            break;
 
-    case IMAGE_SUBSYSTEM_XBOX:
-        str << L"Xbox系统。";
-        break;
+        case IMAGE_SUBSYSTEM_XBOX:
+            str << L"Xbox系统。";
+            break;
 
-    case IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION:
-        str << L"启动应用程序";
-        break;
+        case IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION:
+            str << L"启动应用程序";
+            break;
 
-    default:
-        break;
+        default:
+            break;
+        }
     }
+    else if (m_option_head64 != nullptr)
+    {
+        switch (m_option_head64->Subsystem)
+        {
+        case IMAGE_SUBSYSTEM_UNKNOWN:
+            str << L"未知子系统";
+            break;
 
+        case IMAGE_SUBSYSTEM_NATIVE:
+            str << L"无需子系统（设备驱动程序）";
+            break;
+
+        case IMAGE_SUBSYSTEM_WINDOWS_GUI:
+            str << L"Windows图形界面程序";
+            break;
+
+        case IMAGE_SUBSYSTEM_WINDOWS_CUI:
+            str << L"Windows字符模式（控制台程序）";
+            break;
+
+        case IMAGE_SUBSYSTEM_OS2_CUI:
+            str << L"OS / 2 CUI子系统。";
+            break;
+
+        case IMAGE_SUBSYSTEM_POSIX_CUI:
+            str << L"POSIX CUI子系统。";
+            break;
+
+        case IMAGE_SUBSYSTEM_WINDOWS_CE_GUI:
+            str << L"Windows CE系统。";
+            break;
+
+        case IMAGE_SUBSYSTEM_EFI_APPLICATION:
+            str << L"可扩展固件接口（EFI）应用程序。";
+            break;
+
+        case IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER:
+            str << L"带引导服务的EFI驱动程序。";
+            break;
+
+        case IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER:
+            str << L"具有运行时服务的EFI驱动程序。";
+            break;
+
+        case IMAGE_SUBSYSTEM_EFI_ROM:
+            str << L"EFI ROM映像。";
+            break;
+
+        case IMAGE_SUBSYSTEM_XBOX:
+            str << L"Xbox系统。";
+            break;
+
+        case IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION:
+            str << L"启动应用程序";
+            break;
+
+        default:
+            break;
+        }
+    }
+      
     return str;
 }
 
 XString 
 XOptionHeadStream::DllCharacteristics()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    if (m_option_head->Subsystem & 0x0001)
+    if (m_option_head32 != nullptr)
     {
-        str << L"保留。\r\n";
-    }
+        if (m_option_head32->Subsystem & 0x0001)
+        {
+            str << L"保留。\r\n";
+        }
 
-    if (m_option_head->Subsystem & 0x0002)
+        if (m_option_head32->Subsystem & 0x0002)
+        {
+            str << L"保留。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & 0x0008)
+        {
+            str << L"保留。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & 0x0008)
+        {
+            str << L"保留。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE)
+        {
+            str << L"DLL可以在加载时被重定位。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY)
+        {
+            str << L"DLL强制代码实施完整性验证。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
+        {
+            str << L"该映像与数据执行保护（DEP）兼容。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
+        {
+            str << L"可以隔离，但并不隔离此映像。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_NO_SEH)
+        {
+            str << L"映像不使用SEH。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_NO_BIND)
+        {
+            str << L"不绑定映像。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & 0x1000)
+        {
+            str << L"保留。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_WDM_DRIVER)
+        {
+            str << L"一个WDM驱动程序。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & 0x4000)
+        {
+            str << L"保留。\r\n";
+        }
+
+        if (m_option_head32->Subsystem & IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE)
+        {
+            str << L"映像是终端服务器识别的。\r\n";
+        }
+    }
+    else if (m_option_head64 != nullptr)
     {
-        str << L"保留。\r\n";
-    }
+        if (m_option_head64->Subsystem & 0x0001)
+        {
+            str << L"保留。\r\n";
+        }
 
-    if (m_option_head->Subsystem & 0x0008)
-    {
-        str << L"保留。\r\n";
-    }
+        if (m_option_head64->Subsystem & 0x0002)
+        {
+            str << L"保留。\r\n";
+        }
 
-    if (m_option_head->Subsystem & 0x0008)
-    {
-        str << L"保留。\r\n";
-    }
+        if (m_option_head64->Subsystem & 0x0008)
+        {
+            str << L"保留。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE)
-    {
-        str << L"DLL可以在加载时被重定位。\r\n";
-    }
+        if (m_option_head64->Subsystem & 0x0008)
+        {
+            str << L"保留。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY)
-    {
-        str << L"DLL强制代码实施完整性验证。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE)
+        {
+            str << L"DLL可以在加载时被重定位。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
-    {
-        str << L"该映像与数据执行保护（DEP）兼容。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY)
+        {
+            str << L"DLL强制代码实施完整性验证。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
-    {
-        str << L"可以隔离，但并不隔离此映像。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
+        {
+            str << L"该映像与数据执行保护（DEP）兼容。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_NO_SEH)
-    {
-        str << L"映像不使用SEH。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_NX_COMPAT)
+        {
+            str << L"可以隔离，但并不隔离此映像。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_NO_BIND)
-    {
-        str << L"不绑定映像。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_NO_SEH)
+        {
+            str << L"映像不使用SEH。\r\n";
+        }
 
-    if (m_option_head->Subsystem & 0x1000)
-    {
-        str << L"保留。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_NO_BIND)
+        {
+            str << L"不绑定映像。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_WDM_DRIVER)
-    {
-        str << L"一个WDM驱动程序。\r\n";
-    }
+        if (m_option_head64->Subsystem & 0x1000)
+        {
+            str << L"保留。\r\n";
+        }
 
-    if (m_option_head->Subsystem & 0x4000)
-    {
-        str << L"保留。\r\n";
-    }
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_WDM_DRIVER)
+        {
+            str << L"一个WDM驱动程序。\r\n";
+        }
 
-    if (m_option_head->Subsystem & IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE)
-    {
-        str << L"映像是终端服务器识别的。\r\n";
-    }
+        if (m_option_head64->Subsystem & 0x4000)
+        {
+            str << L"保留。\r\n";
+        }
 
+        if (m_option_head64->Subsystem & IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE)
+        {
+            str << L"映像是终端服务器识别的。\r\n";
+        }
+    }
+     
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfStackReserve()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfStackReserve;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfStackReserve;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfStackReserve;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfStackCommit()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfStackCommit;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfStackCommit;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfStackCommit;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfHeapReserve()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfHeapReserve;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfHeapReserve;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfHeapReserve;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::SizeOfHeapCommit()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->SizeOfHeapCommit;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->SizeOfHeapCommit;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->SizeOfHeapCommit;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::LoaderFlags()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->LoaderFlags;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->LoaderFlags;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->LoaderFlags;
+    } 
     return str;
 }
 
 XString 
 XOptionHeadStream::NumberOfRvaAndSizes()
 {
-    IS_POINT_EMPTY_RET_WCSNULL(m_option_head);
+    IS_POINT_EMPTY_RET_WCSNULL(m_option_head32);
 
     XString str;
-    str << m_option_head->NumberOfRvaAndSizes;
+    if (m_option_head32 != nullptr)
+    {
+        str << m_option_head32->NumberOfRvaAndSizes;
+    }
+    else if (m_option_head64 != nullptr)
+    {
+        str << m_option_head64->NumberOfRvaAndSizes;
+    } 
     return str;
 }
  

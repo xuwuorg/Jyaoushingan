@@ -1,4 +1,5 @@
 #pragma once
+  
 /************************************************************************************
 **  Copyright 2018 ~ 2222 阿虚
 **  blog: http://www.xuwu.org
@@ -92,7 +93,7 @@
 class XJyaoushingan;
 
 #include <windows.h>
-#include <XString.h>
+#include "XString.h"
 #include <map>
 #include <list>
 
@@ -141,26 +142,38 @@ typedef class XXXPort_Fun_Name_Table
 {
 public:
     XXXPort_Fun_Name_Table()
+        : m_address_x86(0)
+        , m_address_x64(0)
     {}
     XXXPort_Fun_Name_Table(WORD index, XString& name, DWORD address)
         : m_index(index)
         , m_name(name)
-        , m_address(address)
+        , m_address_x86(address)
+        , m_address_x64(0)
+    {}
+    XXXPort_Fun_Name_Table(WORD index, XString& name, ULONGLONG address)
+        : m_index(index)
+        , m_name(name)
+        , m_address_x64(address)
+        , m_address_x86(0)
     {}
     virtual ~XXXPort_Fun_Name_Table()
     {}
     inline void set_index(WORD index) { m_index = index; };
     inline void set_name(const char* fun_name) { m_name = fun_name; }
-    inline void set_address(DWORD address) { m_address = address; };
+    inline void set_address_x86(DWORD address) { m_address_x86 = address; };
+    inline void set_address_x64(ULONGLONG address) { m_address_x64 = address; };
 
     inline WORD get_index() { return m_index; }
     inline XString get_name() { return m_name; }
-    inline DWORD get_address() { return m_address; }
+    inline DWORD get_address_x86() { return m_address_x86; }
+    inline ULONGLONG get_address_x64() { return m_address_x64; }
 
 private:
     WORD m_index;
     XString m_name;
-    DWORD m_address;
+    DWORD m_address_x86;
+    ULONGLONG m_address_x64;
 }XIMPORT_FUN_NAME_TABLE, * PXIMPORT_FUN_NAME_TABLE;
 typedef XXXPort_Fun_Name_Table XEXPORT_FUN_NAME_TABLE, * PXEXPORT_FUN_NAME_TABLE;
 typedef XXXPort_Fun_Name_Table XDELAY_IMPOR_FUN_NAME_TABLE, *PXDELAY_IMPOR_FUN_NAME_TABLE;
@@ -175,7 +188,8 @@ typedef XIMPORT_FUN_TABLE XDELAY_IMPOR_FUN_TABLE, * PXDELAY_IMPOR_FUN_TABLE;
 typedef struct tagExportData
 {
     XString m_name;
-    DWORD m_base;
+    DWORD m_basex86;
+    ULONGLONG m_basex64;
     XEXPORT_FUN_TABLE m_fun_table;
 }EXPORT_TABLE_DATA, * PEXPORT_TABLE_DATA;
 
@@ -322,7 +336,7 @@ public: /* PE结构体信息获取成员方法 */
     **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
-    bool get_file_head(IMAGE_FILE_HEADER& file_head); 
+    bool get_file_head(IMAGE_FILE_HEADER& file_head);   
     /*
     **  （如果有需要）修改文件头结构体信息
     **  param1：需要修改的结构体信息
@@ -331,8 +345,12 @@ public: /* PE结构体信息获取成员方法 */
     **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
     **      请自行确保传入参数的内存正确，里面不会检测内存是否可读。
     */
-    bool set_file_head(IMAGE_FILE_HEADER& file_head);  
-
+    bool set_file_head(IMAGE_FILE_HEADER& file_head);   
+    /*
+    **  判断文件是不是64位进程内容 
+    **  返回值：如果是64为程序成功返回true，否则返回false。
+    */
+    bool is_x64();
     /*
     **  获取选择头结构体信息
     **  param1：返回IMAGE_OPTIONAL_HEADER结构体信息给你
@@ -341,7 +359,8 @@ public: /* PE结构体信息获取成员方法 */
     **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
-    bool get_option_head(IMAGE_OPTIONAL_HEADER& option_head); 
+    bool get_option_head32(IMAGE_OPTIONAL_HEADER32& option_head);
+    bool get_option_head64(IMAGE_OPTIONAL_HEADER64& option_head);
     /*
     **  （如果有需要）修改选择头结构体信息
     **  param1：需要修改的结构体信息
@@ -470,7 +489,7 @@ public: /* PE结构体信息获取成员方法 */
     **      如果检测到不是PE也会返回false具体是哪种错误需要调用get_last_err()来确定。
     **      请自行确保传出参数的内存正确，里面不会检测传出内存是否可写。
     */
-    bool get_resource(std::list<XRESOURCE_DATA> data);
+    bool get_resource(std::list<XRESOURCE_DATA>& data);
     /*
     **  获取延迟加载导入表
     **  param1：输出参数，返回当前PE的所有资源表数据内容
@@ -539,7 +558,7 @@ private:
         LPVOID m_fp_bufer;
         LPVOID m_memory_buf;
     }; 
-
+      
     //函数执行错误编码
     DWORD m_err;
 
@@ -548,7 +567,12 @@ private:
     bool m_bis_mz;
 
     //pe头偏移指针
-    PIMAGE_NT_HEADERS m_pe;
+    bool m_x64;
+
+    DWORD* m_pe;
+    PIMAGE_FILE_HEADER m_file_head;
+    PIMAGE_OPTIONAL_HEADER32 m_option_x86;
+    PIMAGE_OPTIONAL_HEADER64 m_option_x64;
     bool m_bis_pe;
 
     //节表偏移指针
@@ -602,10 +626,10 @@ private:
 class XOptionHeadStream
 {
 public:
-    XOptionHeadStream(const IMAGE_OPTIONAL_HEADER& option_head);
+    XOptionHeadStream(void* option_head, bool x64);
     virtual ~XOptionHeadStream();
 
-    void init(const IMAGE_OPTIONAL_HEADER& option_head);
+    void init(void* option_head, bool x64);
     XString to_string();
     XString Magic();
     XString MajorLinkerVersion();
@@ -639,7 +663,8 @@ public:
     XString NumberOfRvaAndSizes();
 
 private:
-    const IMAGE_OPTIONAL_HEADER* m_option_head;
+    PIMAGE_OPTIONAL_HEADER32 m_option_head32;
+    PIMAGE_OPTIONAL_HEADER64 m_option_head64;
 };
  
 class XDataDirStream
