@@ -1,6 +1,7 @@
 邪王真眼 Jyaoushingan
 ===========================
 ## 关于Jyaoushingan
+
 Jyaoushingan日文的罗马音中文翻译就是邪王真眼。名字来源于《中二病也要谈恋爱》中女主角给自己右眼起的名字。
 ![Jyaoushingan](https://github.com/xuwuorg/Jyaoushingan/blob/master/img/RfaX7cW.gif "Jyaoushingan")
 
@@ -40,3 +41,9 @@ MZ  PE  节信息  导入表  导出表  重定位表  资源表  延迟加载�
 
 ## 关于bug
 如果有bug可以直接在github上面提给我。我看到了就会修改。尽可能的保证稳定。
+
+## 更新日志
+2020/07/19:
+	增加对amd64位EXE做解析
+	支持x86编译解析x86和x64
+	支持X64编译解析x86和x64
